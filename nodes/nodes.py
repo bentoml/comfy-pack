@@ -269,6 +269,57 @@ class StringInput:
         return True
 
 
+class SelectionInput:
+    COLOR = (142, 36, 170)
+
+    @classmethod
+    def INPUT_TYPES(cls):
+        return {
+            "required": {
+                "selected": ("STRING", {"default": ""}),
+                "options": ("STRING", {"multiline": True, "default": ""}),
+                "start_index": (["0", "1"], {"default": "0"}),
+            },
+        }
+
+    RETURN_TYPES = (
+        "STRING",
+        "INT",
+    )
+    FUNCTION = "process"
+    CATEGORY = "ComfyUI-IDL/input"
+
+    @classmethod
+    def process(cls, selected, options, start_index):
+        options_list = [opt.strip() for opt in options.split("\n") if opt.strip()]
+
+        if not options_list:
+            return ("", -1)
+
+        assert selected in options_list
+
+        index = options_list.index(selected)
+        return_index = index + (1 if start_index == "1" else 0)
+
+        return (
+            selected,
+            return_index,
+        )
+
+    @classmethod
+    def VALIDATE_INPUTS(cls, selected, options, start_index):
+        try:
+            set_bentoml_output([cls.process(selected, options, start_index)])
+            return True
+        except AssertionError:
+            return False
+
+    @classmethod
+    def IS_CHANGED(cls, selected, options, start_index):
+        options_list = [opt.strip() for opt in options.split("\n") if opt.strip()]
+        return hash((selected, tuple(options_list), start_index))
+
+
 class IntegerInput:
     COLOR = (142, 36, 170)
 
@@ -378,6 +429,7 @@ NODE_CLASS_MAPPINGS = {
     "BentoOutputImage": OutputImage,
     "BentoInputImage": ImageInput,
     "BentoInputString": StringInput,
+    "BentoInputSelection": SelectionInput,
     "BentoInputInteger": IntegerInput,
     "BentoInputFloat": FloatInput,
     "BentoInputBoolean": BooleanInput,
@@ -391,6 +443,7 @@ NODE_DISPLAY_NAME_MAPPINGS = {
     "BentoInputFloat": "Float Input",
     "BentoInputBoolean": "Boolean Input",
     "BentoInputString": "String Input",
+    "BentoInputSelection": "Selection Input",
     "BentoOutputImage": "Image Output",
     "BentoOutputPath": "Path Output",
 }
