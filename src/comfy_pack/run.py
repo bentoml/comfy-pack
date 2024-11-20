@@ -25,10 +25,7 @@ def _probe_comfyui_server():
 
 
 class WorkflowRunner:
-    def __init__(
-        self,
-        workspace: str,
-    ) -> None:
+    def __init__(self, workspace: str, input_dir: str | None = None) -> None:
         """
         Initialize the WorkflowRunner.
 
@@ -38,6 +35,7 @@ class WorkflowRunner:
         self.workspace = workspace
         self.temp_dir = Path(workspace) / "cli_run" / "temp"
         self.output_dir = Path(workspace) / "cli_run" / "output"
+        self.input_dir = input_dir
         self.is_running = False
 
     def start(self, verbose: int = 0) -> None:
@@ -82,6 +80,8 @@ class WorkflowRunner:
             "--temp-directory",
             self.temp_dir,
         ]
+        if self.input_dir:
+            command.extend(["--input-directory", self.input_dir])
         if subprocess.run(command, check=True, stdout=stdout):
             self.is_running = True
             _probe_comfyui_server()
