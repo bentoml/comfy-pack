@@ -3,7 +3,6 @@ from __future__ import annotations
 import json
 import logging
 import os
-import shutil
 from pathlib import Path
 from typing import Any, cast
 
@@ -15,7 +14,7 @@ import comfy_pack.run
 
 REQUEST_TIMEOUT = 360
 BASE_DIR = Path(__file__).parent
-WORKFLOW_FILE = BASE_DIR / "workflow.json"
+WORKFLOW_FILE = BASE_DIR / "workflow_api.json"
 COPY_THRESHOLD = 10 * 1024 * 1024
 INPUT_DIR = BASE_DIR / "input"
 comfy_workspace = os.path.join(os.getcwd(), "comfy_workspace")
@@ -34,7 +33,7 @@ def workflow_json():
 
 
 @bentoml.mount_asgi_app(app, path="/comfy")
-@bentoml.service(traffic={{"timeout": REQUEST_TIMEOUT * 2}})
+@bentoml.service(traffic={"timeout": REQUEST_TIMEOUT * 2})
 class ComfyService:
     def __init__(self):
         self.comfy_proc = comfy_pack.run.WorkflowRunner(
@@ -89,8 +88,6 @@ class ComfyService:
             model_path = Path(comfy_workspace) / cast(str, model["filename"])
             model_path.parent.mkdir(parents=True, exist_ok=True)
             bento_model = bentoml.models.get(model_tag)
-            model_file = next(
-                f for f in Path(bento_model.path).iterdir() if f.is_file()
-            )
+            model_file = bento_model.path_of(model_path.name)
             logger.info("Copying %s to %s", model_file, model_path)
-            shutil.copy(model_file, model_path)
+            model_path.symlink_to(model_file)

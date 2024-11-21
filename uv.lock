@@ -523,7 +523,7 @@ wheels = [
 
 [[package]]
 name = "comfy-pack"
-version = "0.1.4.dev9+g7b9d375.d20241120"
+version = "0.1.4.dev10+g1d19c05"
 source = { editable = "." }
 dependencies = [
     { name = "bentoml" },

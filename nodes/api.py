@@ -37,7 +37,7 @@ async def _write_requirements(path: ZPath, extras: list[str] | None = None) -> N
             stdout=subprocess.PIPE,
         )
         stdout, _ = await proc.communicate()
-        f.write(stdout.rstrip("\n") + "\n")
+        f.write(stdout.decode().rstrip("\n") + "\n")
         if extras:
             f.write("\n".join(extras) + "\n")
 
@@ -56,7 +56,7 @@ async def _write_snapshot(path: ZPath, data: dict, models: list | None = None) -
             "models": models,
             "custom_nodes": await _get_custom_nodes(),
         }
-        f.write(json.dumps(data, indent=2).encode())
+        f.write(json.dumps(data, indent=2))
 
 
 async def _get_models(data: dict, store_models: bool = False) -> list:
@@ -99,7 +99,7 @@ async def _get_models(data: dict, store_models: bool = False) -> list:
             try:
                 model = bentoml.models.get(model_tag)
             except bentoml.exceptions.NotFound:
-                with bentoml.models.create(model_tag) as model:
+                with bentoml.models.create(model_tag, module="comfyui.models") as model:
                     shutil.copy(filename, Path(model.path) / Path(filename).name)
             model_data["model_tag"] = model_tag
         models.append(model_data)
@@ -149,9 +149,9 @@ async def _get_custom_nodes() -> list:
 async def _write_workflow(path: ZPath, data: dict) -> None:
     print("Package => Writing workflow")
     with path.joinpath("workflow_api.json").open("w") as f:
-        f.write(json.dumps(data["workflow_api"], indent=2).encode())
+        f.write(json.dumps(data["workflow_api"], indent=2))
     with path.joinpath("workflow.json").open("w") as f:
-        f.write(json.dumps(data["workflow"], indent=2).encode())
+        f.write(json.dumps(data["workflow"], indent=2))
 
 
 async def _write_inputs(path: ZPath, data: dict) -> None:
@@ -227,7 +227,7 @@ async def build_bento(request):
         shutil.copytree(COMFY_PACK_DIR, temp_dir_path / COMFY_PACK_DIR.name)
         models = await _get_models(data, store_models=True)
 
-        await _write_requirements(temp_dir_path, ["comfy-cli"])
+        await _write_requirements(temp_dir_path, ["comfy-cli", "fastapi"])
         await _write_snapshot(temp_dir_path, models)
         await _write_workflow(temp_dir_path, data)
         await _write_inputs(temp_dir_path, data)
