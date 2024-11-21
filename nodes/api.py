@@ -236,34 +236,50 @@ async def build_bento(request):
         )
 
         # create a bento
-        bento = bentoml.build(
-            "service:ComfyService",
-            name=data["bento_name"],
-            build_ctx=temp_dir,
-            models=[m["model_tag"] for m in models if "model_tag" in m],
-            docker={
-                "python_version": f"{sys.version_info.major}.{sys.version_info.minor}",
-                "system_packages": [
-                    "git",
-                    "libglib2.0-0",
-                    "libsm6",
-                    "libxrender1",
-                    "libxext6",
-                    "ffmpeg",
-                    "libstdc++-12-dev",
-                    *data.get("system_packages", []),
-                ],
-            },
-            python={"requirements_txt": "requirements.txt", "lock_packages": True},
-        )
+        try:
+            bento = bentoml.build(
+                "service:ComfyService",
+                name=data["bento_name"],
+                build_ctx=temp_dir,
+                models=[m["model_tag"] for m in models if "model_tag" in m],
+                docker={
+                    "python_version": f"{sys.version_info.major}.{sys.version_info.minor}",
+                    "system_packages": [
+                        "git",
+                        "libglib2.0-0",
+                        "libsm6",
+                        "libxrender1",
+                        "libxext6",
+                        "ffmpeg",
+                        "libstdc++-12-dev",
+                        *data.get("system_packages", []),
+                    ],
+                },
+                python={"requirements_txt": "requirements.txt", "lock_packages": True},
+            )
+        except bentoml.exceptions.BentoMLException as e:
+            return web.json_response(
+                {
+                    "result": "error",
+                    "error": f"Build failed: {e.__class__.__name__}: {e}",
+                }
+            )
 
     if data.get("push", False):
         credentials = {}
-        if "api_key" in data:
-            credentials["api_key"] = data["api_key"]
-        if "endpoint" in data:
-            credentials["endpoint"] = data["endpoint"]
+        if api_key := data.get("api_key"):
+            credentials["api_key"] = api_key
+        if endpoint := data.get("endpoint"):
+            credentials["endpoint"] = endpoint
         client = bentoml.cloud.BentoCloudClient(**credentials)
-        client.bento.push(bento)
+        try:
+            client.bento.push(bento)
+        except bentoml.exceptions.BentoMLException as e:
+            return web.json_response(
+                {
+                    "result": "error",
+                    "error": f"Push failed: {e.__class__.__name__}: {e}",
+                }
+            )
 
     return web.json_response({"result": "success", "bento": str(bento.tag)})
