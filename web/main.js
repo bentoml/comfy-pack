@@ -1,105 +1,123 @@
 import { app } from "../../scripts/app.js";
 import { api } from "../../scripts/api.js";
 
+const style = `
+.cpack-modal {
+  position: fixed;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  background: #1a1a1a;
+  padding: 20px;
+  border-radius: 8px;
+  z-index: 1000;
+  min-width: 300px;
+}
+
+.cpack-input {
+  width: 100%;
+  padding: 8px;
+  margin-bottom: 15px;
+  background: #333;
+  border: 1px solid #444;
+  border-radius: 4px;
+  color: #fff;
+  box-sizing: border-box;
+}
+
+.cpack-btn {
+  padding: 6px 12px;
+  background: #666;
+  border: none;
+  border-radius: 4px;
+  color: white;
+  cursor: pointer;
+}
+
+.cpack-btn.primary {
+  background: #00a67d;
+}
+
+.cpack-btn-container {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+}
+
+.cpack-title {
+  margin-bottom: 15px;
+  color: #fff;
+}
+
+.cpack-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.5);
+  z-index: 999;
+}
+`
+
+function createModal(modal) {
+  const overlay = document.createElement("div");
+  overlay.className = "cpack-overlay";
+
+  document.body.appendChild(overlay);
+  document.body.appendChild(modal);
+
+  return {
+    close: () => {
+      modal.remove();
+      overlay.remove();
+    }
+  };
+}
+
 function createInputModal() {
   return new Promise((resolve) => {
     const modal = document.createElement("div");
-    modal.style.cssText = `
-      position: fixed;
-      top: 50%;
-      left: 50%;
-      transform: translate(-50%, -50%);
-      background: #1a1a1a;
-      padding: 20px;
-      border-radius: 8px;
-      z-index: 1000;
-      min-width: 300px;
-    `;
+    modal.className = "cpack-modal";
 
     const title = document.createElement("h3");
     title.textContent = "Package Worlflow";
-    title.style.cssText = `
-      margin-bottom: 15px;
-      color: #fff;
-    `;
+    title.className = "cpack-title";
 
     const input = document.createElement("input");
     input.type = "text";
     input.value = "package";
-    input.style.cssText = `
-      width: 100%;
-      padding: 8px;
-      margin-bottom: 15px;
-      background: #333;
-      border: 1px solid #444;
-      border-radius: 4px;
-      color: #fff;
-      box-sizing: border-box;
-    `;
+    input.className = "cpack-input";
 
     const buttonContainer = document.createElement("div");
-    buttonContainer.style.cssText = `
-      display: flex;
-      justify-content: flex-end;
-      gap: 10px;
-    `;
+    buttonContainer.className = "cpack-btn-container";
 
     const confirmButton = document.createElement("button");
     confirmButton.textContent = "Confirm";
-    confirmButton.style.cssText = `
-      padding: 6px 12px;
-      background: #00a67d;
-      border: none;
-      border-radius: 4px;
-      color: white;
-      cursor: pointer;
-    `;
+    confirmButton.className = "cpack-btn primary";
 
     const cancelButton = document.createElement("button");
     cancelButton.textContent = "Cancel";
-    cancelButton.style.cssText = `
-      padding: 6px 12px;
-      background: #666;
-      border: none;
-      border-radius: 4px;
-      color: white;
-      cursor: pointer;
-    `;
-
-    const overlay = document.createElement("div");
-    overlay.style.cssText = `
-      position: fixed;
-      top: 0;
-      left: 0;
-      right: 0;
-      bottom: 0;
-      background: rgba(0, 0, 0, 0.5);
-      z-index: 999;
-    `;
+    cancelButton.className = "cpack-btn";
 
     buttonContainer.appendChild(cancelButton);
     buttonContainer.appendChild(confirmButton);
     modal.appendChild(title);
     modal.appendChild(input);
     modal.appendChild(buttonContainer);
-    document.body.appendChild(overlay);
-    document.body.appendChild(modal);
 
-    const cleanup = () => {
-      modal.remove();
-      overlay.remove();
-    };
+    const { close } = createModal(modal);
 
     confirmButton.onclick = () => {
       const filename = input.value.trim();
       if (filename) {
-        cleanup();
+        close();
         resolve(filename);
       }
     };
 
     cancelButton.onclick = () => {
-      cleanup();
+      close();
       resolve(null);
     };
 
@@ -115,17 +133,7 @@ function createInputModal() {
 
 function createDownloadModal() {
   const modal = document.createElement("div");
-  modal.style.cssText = `
-    position: fixed;
-    top: 50%;
-    left: 50%;
-    transform: translate(-50%, -50%);
-    background: #1a1a1a;
-    padding: 20px;
-    border-radius: 8px;
-    z-index: 1000;
-    min-width: 300px;
-  `;
+  modal.className = "cpack-modal";
 
   const title = document.createElement("h3");
   title.textContent = "Packaging...";
@@ -153,38 +161,66 @@ function createDownloadModal() {
   modal.appendChild(title);
   modal.appendChild(progress);
 
-  const overlay = document.createElement("div");
-  overlay.style.cssText = `
-    position: fixed;
-    top: 0;
-    left: 0;
-    right: 0;
-    bottom: 0;
-    background: rgba(0, 0, 0, 0.5);
-    z-index: 999;
-  `;
-
-  document.body.appendChild(overlay);
-  document.body.appendChild(modal);
+  const { close } = createModal(modal);
 
   return {
-    modal,
-    overlay,
-    progressBar,
     updateProgress: (percent) => {
       progressBar.style.width = `${percent}%`;
     },
-    close: () => {
-      modal.remove();
-      overlay.remove();
-    }
+    close
   };
+}
+
+async function downloadPackage(event) {
+  const filename = await createInputModal();
+  if (!filename) return;
+
+  const button = event.target;
+
+  button.disabled = true;
+  const downloadModal = createDownloadModal();
+
+  try {
+    downloadModal.updateProgress(20);
+    const { workflow, output: workflow_api } = await app.graphToPrompt();
+
+    downloadModal.updateProgress(40);
+    const body = JSON.stringify({ workflow, workflow_api });
+
+    downloadModal.updateProgress(60);
+    const resp = await api.fetchApi("/bentoml/pack", { method: "POST", body, headers: { "Content-Type": "application/json" } });
+
+    downloadModal.updateProgress(80);
+    const downloadUrl = (await resp.json())["download_url"];
+
+    downloadModal.updateProgress(100);
+    const link = document.createElement("a");
+    link.href = downloadUrl;
+    link.download = filename + ".cpack.zip";
+    link.click();
+
+    setTimeout(() => {
+      downloadModal.close();
+    }, 1000);
+  } catch (error) {
+    console.error("Package failed:", error);
+    downloadModal.close();
+  } finally {
+    button.disabled = false;
+  }
+}
+
+function buildBento() {
+
 }
 
 app.registerExtension({
   name: "Comfy.CPackExtension",
 
   async setup() {
+    const styleTag = document.createElement("style");
+    styleTag.innerHTML = style;
+    document.head.appendChild(styleTag);
     const menu = document.querySelector(".comfy-menu");
     const separator = document.createElement("hr");
 
@@ -193,42 +229,12 @@ app.registerExtension({
     menu.append(separator);
     const packButton = document.createElement("button");
     packButton.textContent = "Package";
-    packButton.onclick = async () => {
-      const filename = await createInputModal();
-      if (!filename) return;
-      
-      packButton.disabled = true;
-      const downloadModal = createDownloadModal();
-      
-      try {
-        downloadModal.updateProgress(20);
-        const { workflow, output: workflow_api } = await app.graphToPrompt();
-        
-        downloadModal.updateProgress(40);
-        const body = JSON.stringify({ workflow, workflow_api });
-        
-        downloadModal.updateProgress(60);
-        const resp = await api.fetchApi("/bentoml/pack", { method: "POST", body, headers: { "Content-Type": "application/json" } });
-        
-        downloadModal.updateProgress(80);
-        const downloadUrl = (await resp.json())["download_url"];
-
-        downloadModal.updateProgress(100);
-        const link = document.createElement("a");
-        link.href = downloadUrl;
-        link.download = filename + ".cpack.zip";
-        link.click();
-
-        setTimeout(() => {
-          downloadModal.close();
-        }, 1000);
-      } catch (error) {
-        console.error("Package failed:", error);
-        downloadModal.close();
-      } finally {
-        packButton.disabled = false;
-      }
-    }
+    packButton.onclick = downloadPackage;
     menu.append(packButton);
+
+    const buildButton = document.createElement("button");
+    buildButton.textContent = "Build";
+    buildButton.onclick = buildBento;
+    menu.append(buildButton);
   }
 });
