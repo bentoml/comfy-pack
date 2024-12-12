@@ -1,17 +1,7 @@
-from __future__ import annotations
-
+from .const import MODEL_SOURCE_CACHE_FILE
 import asyncio
 import json
-import os
 import re
-from concurrent.futures import ThreadPoolExecutor
-from typing import TYPE_CHECKING, TypedDict
-
-from .const import MODEL_SOURCE_CACHE_FILE
-from .hash import ModelHashes
-
-if TYPE_CHECKING:
-    from typing import NotRequired
 
 # MODEL_NAME = r"[a-zA-Z0-9-._]+"
 # COMMIT = r"[a-f0-9]+"
@@ -24,8 +14,8 @@ PATH_PATTERN = re.compile(
 
 
 async def _lookup_huggingface_model(model_sha: str) -> dict:
-    import aiohttp
     from googlesearch import search
+    import aiohttp
 
     query = f"site:huggingface.co blob {model_sha}"
     async with aiohttp.ClientSession(trust_env=True) as session:
@@ -140,7 +130,7 @@ async def _loopup_civitai_model(model_sha: str) -> dict:
             }
 
 
-async def alookup_model_source(model_sha: str, cache_only: bool = False) -> dict:
+async def alookup_model_source(model_sha: str, cache_only=False) -> dict:
     if not model_sha:
         return {}
     try:
@@ -169,65 +159,3 @@ async def alookup_model_source(model_sha: str, cache_only: bool = False) -> dict
 
 def lookup_model_source(model_sha: str, cache_only=False) -> dict:
     return asyncio.run(alookup_model_source(model_sha, cache_only=cache_only))
-
-
-class ModelEntry(TypedDict):
-    filename: str
-    size: int
-    atime: float
-    ctime: float
-    sha256: str
-    source: dict
-    disabled: bool
-    refered: bool
-    model_tag: NotRequired[str]
-
-
-async def get_model_entry(
-    filename: str,
-    executor: ThreadPoolExecutor,
-    hash_cache: ModelHashes,
-    store_models: bool = False,
-    ensure_source: bool = True,
-) -> ModelEntry:
-    import folder_paths
-
-    relpath = os.path.relpath(filename, folder_paths.base_path)
-    sha256 = await hash_cache.get(
-        filename, cache_only=not (ensure_source or store_models)
-    )
-    if ensure_source:
-        print("[Comfy-Pack] Resolving model", relpath)
-
-    model_data: ModelEntry = {
-        "filename": relpath,
-        "size": os.path.getsize(filename),
-        "atime": os.path.getatime(filename),
-        "ctime": os.path.getctime(filename),
-        "sha256": sha256,
-        "source": await alookup_model_source(sha256, cache_only=not ensure_source),
-        "disabled": False,
-        "refered": False,
-    }
-
-    if store_models:
-
-        def store_func():
-            print("[Comfy-Pack] Storing model", relpath)
-            import shutil
-
-            import bentoml
-
-            model_tag = f"cpack-model:{sha256[:16]}"
-            try:
-                model = bentoml.models.get(model_tag)
-            except bentoml.exceptions.NotFound:
-                with bentoml.models.create(
-                    model_tag, labels={"filename": relpath}
-                ) as model:
-                    shutil.copy(filename, model.path_of("model.bin"))
-            model_data["model_tag"] = model_tag
-
-        await asyncio.get_event_loop().run_in_executor(executor, store_func)
-
-    return model_data
