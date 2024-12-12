@@ -80,7 +80,11 @@ async def async_batch_get_sha256(
                 # Get file info
                 stat = os.stat(filepath)
                 current_size = stat.st_size
-                current_time = stat.st_birthtime
+                try:
+                    current_time = stat.st_birthtime
+                except AttributeError:
+                    # linux files have no `st_birthtime`
+                    current_time = stat.st_ctime
 
                 # Check cache
                 cache_entry = cache.get(filepath)
