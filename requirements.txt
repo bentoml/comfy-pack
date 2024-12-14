@@ -1,4 +1,4 @@
 bentoml
 fastapi
 comfy-cli
-googlesearch-python
+duckduckgo-search

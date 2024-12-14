@@ -14,37 +14,46 @@ PATH_PATTERN = re.compile(
 
 
 async def _lookup_huggingface_model(model_sha: str) -> dict:
-    from googlesearch import search
+    from duckduckgo_search import DDGS
     import aiohttp
 
     query = f"site:huggingface.co blob {model_sha}"
-    async with aiohttp.ClientSession(trust_env=True) as session:
-        for url in search(query, num_results=5):
-            assert isinstance(url, str)
-            if "blob" not in url:
-                continue
-            try:
-                async with session.get(url) as resp:
-                    if resp.status != 200:
+
+    try:
+        with DDGS() as ddgs:
+            search_results = ddgs.text(query, max_results=5)
+
+            async with aiohttp.ClientSession(trust_env=True) as session:
+                for result in search_results:
+                    url = result['link']
+                    if "blob" not in url:
                         continue
-                    text = await resp.text()
-                    if commit_match := COMMIT_PATTERN.search(text):
-                        repo, commit = commit_match.groups()
-                        if path_match := PATH_PATTERN.search(text):
-                            path = path_match.group(1)
-                            download_url = f"https://huggingface.co/{repo}/resolve/{commit}/{path}?download=true"
-                            url = f"https://huggingface.co/{repo}/blob/{commit}/{path}"
-                            info = {
-                                "download_url": download_url,
-                                "url": url,
-                                "repo": repo,
-                                "commit": commit,
-                                "path": path,
-                                "source": "huggingface",
-                            }
-                            return info
-            except aiohttp.ClientError:
-                continue
+
+                    try:
+                        async with session.get(url) as resp:
+                            if resp.status != 200:
+                                continue
+                            text = await resp.text()
+                            if commit_match := COMMIT_PATTERN.search(text):
+                                repo, commit = commit_match.groups()
+                                if path_match := PATH_PATTERN.search(text):
+                                    path = path_match.group(1)
+                                    download_url = f"https://huggingface.co/{repo}/resolve/{commit}/{path}?download=true"
+                                    url = f"https://huggingface.co/{repo}/blob/{commit}/{path}"
+                                    info = {
+                                        "download_url": download_url,
+                                        "url": url,
+                                        "repo": repo,
+                                        "commit": commit,
+                                        "path": path,
+                                        "source": "huggingface",
+                                    }
+                                    return info
+                    except aiohttp.ClientError:
+                        continue
+    except Exception:
+        pass
+
     return {}
 
 

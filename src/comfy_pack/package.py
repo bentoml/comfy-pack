@@ -161,9 +161,9 @@ def install_dependencies(
     return venv_py
 
 
-def get_google_search_url(sha: str) -> str:
-    """Generate Google custom search URLs for model on HuggingFace and CivitAI"""
-    base_url = "https://www.google.com/search"
+def get_search_url(sha: str) -> str:
+    """Generate custom search URLs for model on HuggingFace and CivitAI"""
+    base_url = "https://duckduckgo.com/?q="
     sha = sha.upper()
     hf_query = f"{sha} OR {sha[:10]}"
     hf_query = urllib.parse.quote(hf_query)
@@ -284,8 +284,8 @@ def retrive_models(
             else:
                 continue
 
-        google_url = get_google_search_url(sha)
-        print(f"Search URL: {google_url}")
+        search_url = get_search_url(sha)
+        print(f"Search URL: {search_url}")
         print(f"Path: {workspace / filename}")
 
         while True:
