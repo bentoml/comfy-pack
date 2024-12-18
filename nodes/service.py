@@ -3,13 +3,12 @@ from __future__ import annotations
 import json
 import logging
 import os
-import shutil
 import signal
 import threading
 import time
 from functools import lru_cache
 from pathlib import Path
-from typing import Any, cast
+from typing import Any
 
 import bentoml
 import fastapi
@@ -137,64 +136,6 @@ class ComfyService:
             logger.info("server stopped")
             self.watch_thread.join()
             logger.info("Watch thread finished")
-
-    @bentoml.on_deployment
-    @staticmethod
-    def prepare_comfy_workspace():
-        if EXISTING_COMFYUI_SERVER:
-            return
-
-        from comfy_pack.package import install_comfyui, install_custom_modules
-
-        verbose = int("BENTOML_DEBUG" in os.environ)
-        comfy_workspace = _get_workspace()
-
-        if not comfy_workspace.joinpath(".DONE").exists():
-            if comfy_workspace.exists():
-                logger.info("Removing existing workspace")
-                shutil.rmtree(comfy_workspace, ignore_errors=True)
-            install_comfyui(snapshot, comfy_workspace, verbose=verbose)
-
-            for model in snapshot["models"]:
-                if model.get("disabled", False):
-                    continue
-                model_path = comfy_workspace / cast(str, model["filename"])
-                if model_tag := model.get("model_tag"):
-                    model_path.parent.mkdir(parents=True, exist_ok=True)
-                    bento_model = bentoml.models.get(model_tag)
-                    model_file = bento_model.path_of("model.bin")
-                    logger.info("Copying %s to %s", model_file, model_path)
-                    model_path.symlink_to(model_file)
-                elif (source := model["source"]).get("source") == "huggingface":
-                    matched = next(
-                        (
-                            m
-                            for m in ComfyService.models
-                            if isinstance(m, HuggingFaceModel)
-                            and m.model_id.lower() == source["repo"].lower()
-                            and source["commit"].lower() == m.revision.lower()
-                        ),
-                        None,
-                    )
-                    if matched is not None:
-                        model_file = os.path.join(matched.resolve(), source["path"])
-                        model_path.parent.mkdir(parents=True, exist_ok=True)
-                        logger.info("Copying %s to %s", model_file, model_path)
-                        model_path.symlink_to(model_file)
-                else:
-                    logger.warning(
-                        "Unrecognized model source: %s, the model may be missing",
-                        source,
-                    )
-
-            for f in INPUT_DIR.glob("*"):
-                if f.is_file():
-                    shutil.copy(f, comfy_workspace / "input" / f.name)
-                elif f.is_dir():
-                    shutil.copytree(f, comfy_workspace / "input" / f.name)
-
-            install_custom_modules(snapshot, comfy_workspace, verbose=verbose)
-            comfy_workspace.joinpath(".DONE").touch()
 
 
 if not EXISTING_COMFYUI_SERVER:

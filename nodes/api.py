@@ -531,6 +531,9 @@ async def build_bento(request):
                         "libstdc++-12-dev",
                         *data.get("system_packages", []),
                     ],
+                    "setup_script": Path(__file__)
+                    .with_name("setup_workspace.py")
+                    .as_posix(),
                 },
                 python={"requirements_txt": "requirements.txt", "lock_packages": True},
             )
