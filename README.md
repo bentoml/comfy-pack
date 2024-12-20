@@ -17,7 +17,7 @@ ComfyUI Manager is great for find missing custom nodes. But when sharing ComfyUI
 - "Cannot find the correct model file"
 - "Missing Python dependencies"
 
-These are fundamental challenges in workflow sharing – every component should match exactly: custom nodes, model files, and Python dependencies. Modern pacakge managers like npm and poetry intruduced "lock" feature, which means record the exact version for every requirement. ComfyUI Manager isn't designed for that.
+These are fundamental challenges in workflow sharing – every component should match exactly: custom nodes, model files, and Python dependencies. Modern pacakge managers like npm and poetry introduced "lock" feature, which means record the exact version for every requirement. ComfyUI Manager isn't designed for that.
 
 We learned it from our community and developed comfy-pack to address these problems. With a single click, it captures and locks your entire workflow environment into a `.cpack.zip` file, including Python packages, custom nodes, model hashes, and required assets.
 
