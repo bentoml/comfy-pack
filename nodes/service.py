@@ -132,8 +132,6 @@ class ComfyService:
     def on_shutdown(self):
         logger.info("Shutting down")
         if not EXISTING_COMFYUI_SERVER:
-            self.server.stop()
-            logger.info("server stopped")
             self.watch_thread.join()
             logger.info("Watch thread finished")
 
