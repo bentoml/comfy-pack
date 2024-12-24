@@ -10,6 +10,7 @@ import socket
 import subprocess
 import time
 import uuid
+import sys
 from pathlib import Path
 from typing import Any, Union
 
@@ -119,7 +120,7 @@ class ComfyUIServer:
 
         logger.info("Starting ComfyUI in the background...")
         command = [
-            "python",
+            sys.executable,
             "main.py",
             "--output-directory",
             self.output_dir,
