@@ -18,3 +18,5 @@ MODEL_SOURCE_CACHE_FILE = CPACK_HOME / "model_source_cache.json"
 COMFYUI_REPO = "https://github.com/comfyanonymous/ComfyUI.git"
 COMFY_PACK_REPO = "https://github.com/bentoml/comfy-pack.git"
 COMFYUI_MANAGER_REPO = "https://github.com/ltdrdata/ComfyUI-Manager.git"
+
+STRICT_MODE = os.environ.get("CPACK_STRICT_MODE", "0") in ["1", "true", "True"]

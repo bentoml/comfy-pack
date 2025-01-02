@@ -175,6 +175,17 @@ Follow [the instructions here](https://docs.bentoml.com/en/latest/scale-with-ben
 
 </details>
 
+## Security Guidelines
+
+A cpack file only contains the metadata of the workflow environment, such as Python package versions, ComfyUI and custom node revisions, and model hashes. It does not contain any sensitive information like API keys, passwords, or user data. However, unpacking a cpack file will install custom nodes and Python dependencies. It is recommended to unpack cpack files from trusted sources.
+
+comfy-pack has a strict mode for unpacking. You can enable it by setting the `CPACK_STRICT_MODE` environment variable to `true`. It will sacrifice some flexibility and compatibility for security. For now, comfy-pack will:
+
+* Use more strict index strategy in Python package installation
+
+More security features are under way.
+
+
 ## Roadmap
 
 This project is under active development. Currently we are working on:

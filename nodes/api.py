@@ -530,7 +530,9 @@ async def build_bento_api(request):
         # create a bento
         try:
             bento = build_bento(
-                data["bento_name"], temp_dir_path, data.get("system_packages")
+                data["bento_name"],
+                temp_dir_path,
+                data.get("system_packages"),
             )
         except bentoml.exceptions.BentoMLException as e:
             return web.json_response(

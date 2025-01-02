@@ -12,7 +12,7 @@ import urllib.request
 from pathlib import Path
 from typing import TYPE_CHECKING
 
-from .const import COMFYUI_REPO, MODEL_DIR
+from .const import COMFYUI_REPO, MODEL_DIR, STRICT_MODE
 from .hash import get_sha256
 from .utils import get_self_git_commit
 
@@ -161,17 +161,22 @@ def install_dependencies(
     )
     if verbose > 0:
         print(f"Installing dependencies from {req_file}")
+    install_cmd = [
+        "uv",
+        "pip",
+        "install",
+        "-p",
+        str(venv_py),
+        "-r",
+        req_file,
+        "--no-deps",
+    ]
+    if STRICT_MODE:
+        pass
+    else:
+        install_cmd.extend(["--index-strategy", "unsafe-best-match"])
     subprocess.check_call(
-        [
-            "uv",
-            "pip",
-            "install",
-            "-p",
-            str(venv_py),
-            "-r",
-            req_file,
-            "--no-deps",
-        ],
+        install_cmd,
         stdout=stdout,
         stderr=stderr,
     )
