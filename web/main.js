@@ -9,6 +9,48 @@ const spinner = `<svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" 
 </svg>`
 
 const style = `
+.cpack-tree-list {
+  max-height: 300px;
+  overflow-y: auto;
+  border: 1px solid #444;
+  border-radius: 4px;
+  padding: 5px;
+}
+
+.cpack-tree-item {
+  padding: 3px 0;
+}
+
+.cpack-tree-item label {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  min-height: 20px;
+}
+
+.cpack-tree-children {
+  margin-left: 12px;
+}
+
+.cpack-tree-toggle {
+  width: 12px;
+  height: 12px;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: #888;
+font-size: 0.8em;
+min-width: 12px;
+}
+
+.cpack-tree-toggle:hover {
+  color: #fff;
+}
+
+.cpack-tree-toggle.empty {
+  visibility: hidden;
+}
 .cpack-modal {
   position: fixed;
   top: 50%;
@@ -84,6 +126,10 @@ const style = `
   margin-bottom: 15px;
 }
 
+.cpack-form-item:last-child {
+  margin-bottom: -5px;
+}
+
 .cpack-form-item label {
   margin-bottom: 5px;
 }
@@ -131,10 +177,323 @@ const style = `
 }
 `
 
+class TreeState {
+  constructor() {
+    this.selectedFiles = new Set();
+    this.subscribers = new Set();
+  }
+
+  subscribe(callback) {
+    this.subscribers.add(callback);
+    return () => this.subscribers.delete(callback);
+  }
+
+  notify() {
+    this.subscribers.forEach(callback => callback(this.selectedFiles));
+  }
+
+  toggle(path, checked) {
+    if (checked) {
+      this.selectedFiles.add(path);
+    } else {
+      this.selectedFiles.delete(path);
+    }
+    this.notify();
+  }
+
+  toggleMultiple(paths, checked) {
+    paths.forEach(path => {
+      if (checked) {
+        this.selectedFiles.add(path);
+      } else {
+        this.selectedFiles.delete(path);
+      }
+    });
+    this.notify();
+  }
+
+  isSelected(path) {
+    return this.selectedFiles.has(path);
+  }
+
+  clear() {
+    this.selectedFiles.clear();
+    this.notify();
+  }
+
+  getSelectedCount() {
+    return this.selectedFiles.size;
+  }
+
+  getSelectedFiles() {
+    return Array.from(this.selectedFiles);
+  }
+}
+
+class FileTreeList {
+  constructor(container, countId) {
+    this.container = container;
+    this.countId = countId;
+    this.state = new TreeState();
+    this.init();
+  }
+
+  init() {
+    this.container.classList.add('cpack-tree-list');
+  this.state.subscribe(() => this.updateCount());
+  }
+
+  async load() {
+    try {
+      const { workflow, output: workflow_api } = await app.graphToPrompt();
+      const files = await this.getInputFiles(workflow, workflow_api);
+      
+      // 预先将默认选中的文件添加到选中列表
+      files.forEach(file => {
+        const path = file.path || file;
+        if (file.checked) {
+          this.state.toggle(path, true);
+        }
+      });
+      
+      this.renderTree(this.buildTree(files));
+    
+    // 更新所有父目录的状态
+    this.container.querySelectorAll("[data-action='check-dir']").forEach(checkbox => {
+      this.updateFolderState(checkbox);
+    });
+    
+    // 更新总数
+    this.updateCount();
+    } catch(e) {
+      this.container.innerHTML = `<div style="color: #ff8383">Failed to load files: ${e.message}</div>`;
+    }
+  }
+
+  async getInputFiles(workflow, workflow_api) {
+    const resp = await api.fetchApi("/bentoml/file/query", {
+      method: "POST",
+      body: JSON.stringify({ workflow, workflow_api }),
+      headers: { "Content-Type": "application/json" }
+    });
+    const data = await resp.json();
+    return Array.isArray(data) ? data : (data.files || []);
+  }
+
+  buildTree(files) {
+    const root = { name: 'root', children: {}, files: [] };
+    
+    for (const file of files) {
+      const filePath = file.path || file;
+      const parts = filePath.split(/[\/\\]/);
+      let current = root;
+      
+      for (let i = 0; i < parts.length; i++) {
+        const part = parts[i];
+        if (i === parts.length - 1) {
+          // 这是文件
+          current.files.push({
+            name: part,
+            path: file.path || file,
+            badges: file.badges || [],
+            checked: file.checked || false
+          });
+        // 对文件按名称排序
+        current.files.sort((a, b) => a.name.localeCompare(b.name));
+        } else {
+          // 这是目录
+          if (!current.children[part]) {
+            current.children[part] = {
+              name: part,
+              children: {},
+              files: []
+            };
+          }
+          current = current.children[part];
+        }
+      }
+    }
+    
+    // 对目录按名称排序
+    for (const dir in root.children) {
+      root.children[dir].files.sort((a, b) => a.name.localeCompare(b.name));
+    }
+    
+    return root;
+  }
+
+  renderTree(node, level = 0) {
+    const dirs = Object.values(node.children);
+    const hasChildren = dirs.length > 0 || node.files.length > 0;
+    
+    this.container.innerHTML = this.renderNode(node, true);
+    
+    this.setupEventListeners();
+    this.updateCount();
+  
+  }
+
+  renderNode(node, isRoot = false) {
+    const dirs = Object.values(node.children);
+    const hasChildren = dirs.length > 0 || node.files.length > 0;
+    let html = '';
+
+    if (!isRoot) {
+      html += `
+        <div class="cpack-tree-item">
+          <label>
+            <span class="cpack-tree-toggle ${hasChildren ? '' : 'empty'}" data-action="toggle">
+              ${hasChildren ? '▶' : '▶'}
+            </span>
+            <input type="checkbox" data-action="check-dir" data-path="${node.name}" />
+            <span>${node.name}/</span>
+          </label>
+        </div>
+      `;
+    }
+
+    if (hasChildren) {
+      html += `<div class="cpack-tree-children" style="display: ${isRoot ? '' : 'none'}">`;
+      
+      // 渲染子目录
+      for (const dir of dirs) {
+        html += this.renderNode(dir);
+      }
+      
+      // 渲染文件
+      for (const file of node.files) {
+        html += `
+          <div class="cpack-tree-item">
+            <label style="padding-left: 17px">
+              <input type="checkbox" name="files" value="${file.path}" 
+                ${this.state.isSelected(file.path) || file.checked ? 'checked' : ''} />
+              <span>${file.name}</span>
+              ${file.badges ? file.badges.map(badge => 
+                `<span style="background: ${badge.color || '#00a67d33'}; 
+                  color: ${badge.textColor || '#00a67d'}; 
+                  padding: 2px 6px; 
+                  border-radius: 4px; 
+                  font-size: 0.8em; 
+                  cursor: help;
+                  white-space: nowrap;" 
+                  title="${badge.tooltip || ''}">${badge.text}</span>`
+              ).join('') : ''}
+            </label>
+          </div>
+        `;
+      }
+      
+      html += '</div>';
+    }
+
+    return html;
+  }
+
+  updateFolderState(folderCheckbox) {
+    const treeItem = folderCheckbox.closest('.cpack-tree-item');
+    const children = treeItem.nextElementSibling;
+    if (!children) return;
+
+    const childFiles = children.querySelectorAll("input[name='files']");
+    const checkedCount = Array.from(childFiles).filter(cb => cb.checked).length;
+
+    if (checkedCount === 0) {
+      folderCheckbox.checked = false;
+      folderCheckbox.indeterminate = false;
+    } else if (checkedCount === childFiles.length) {
+      folderCheckbox.checked = true;
+      folderCheckbox.indeterminate = false;
+    } else {
+      folderCheckbox.checked = false;
+      folderCheckbox.indeterminate = true;
+    }
+
+    // 递归更新父文件夹状态
+    const parentFolder = treeItem.parentElement.closest('.cpack-tree-item');
+    if (parentFolder) {
+      const parentCheckbox = parentFolder.querySelector("[data-action='check-dir']");
+      if (parentCheckbox) {
+        this.updateFolderState(parentCheckbox);
+      }
+    }
+
+    // 更新选中文件总数
+    this.updateCount();
+  }
+
+  setupEventListeners() {
+    
+
+    // 目录选择功能
+    this.container.querySelectorAll("[data-action='check-dir']").forEach(checkbox => {
+      checkbox.addEventListener('change', (e) => {
+        const treeItem = e.target.closest('.cpack-tree-item');
+        const children = treeItem.nextElementSibling;
+        if (children) {
+          const childFiles = Array.from(children.querySelectorAll("input[name='files']"))
+            .map(input => input.value);
+          this.state.toggleMultiple(childFiles, e.target.checked);
+          
+          // 更新UI
+          children.querySelectorAll("input[type='checkbox']").forEach(child => {
+            child.checked = e.target.checked;
+          if (child.hasAttribute('data-action')) {
+            child.indeterminate = false;
+          }
+          });
+        }
+        
+      });
+    });
+
+    // 折叠功能
+    this.container.querySelectorAll("[data-action='toggle']").forEach(toggle => {
+      toggle.addEventListener('click', (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        const treeItem = e.target.closest('.cpack-tree-item');
+        const children = treeItem.nextElementSibling;
+        if (children) {
+          children.style.display = children.style.display === 'none' ? '' : 'none';
+          e.target.textContent = children.style.display === 'none' ? '▶' : '▼';
+        }
+      });
+    });
+
+    // 文件选择功能
+    this.container.querySelectorAll("input[name='files']").forEach(checkbox => {
+      checkbox.addEventListener('change', (e) => {
+        this.state.toggle(e.target.value, e.target.checked);
+      
+      // 更新父文件夹状态
+      const parentFolder = checkbox.closest('.cpack-tree-children')
+        ?.previousElementSibling
+        ?.querySelector("[data-action='check-dir']");
+      if (parentFolder) {
+        this.updateFolderState(parentFolder);
+      }
+      });
+    });
+  }
+
+  updateCount() {
+    
+    const countSpan = document.querySelector(`[data-files-count='${this.countId}']`);
+    if (countSpan) {
+      countSpan.textContent = this.state.getSelectedCount();
+    }
+  }
+
+  getSelectedFiles() {
+    return this.state.getSelectedFiles();
+  }
+}
+
 class ModelList {
   constructor(container, countId) {
     this.container = container;
     this.countId = countId;
+    this.selectedModels = new Set();
     this.init();
   }
 
@@ -254,8 +613,10 @@ class ModelList {
   }
 
   getSelectedModels() {
+    // 只返回用户选中的模型
     return Array.from(this.container.querySelectorAll("input[name='models']:checked"))
       .map(input => input.value);
+  
   }
 }
 
@@ -292,14 +653,7 @@ async function createPackModal() {
         <label for="filename">Name</label>
         <input type="text" class="cpack-input" name="filename" value="${localStorage.getItem('cpack-bento-name') || 'comfy-pack-pkg'}" />
       </div>
-      <div class="cpack-form-item">
-        <details>
-          <summary style="cursor: pointer; margin-bottom: 10px;">Models (<span data-models-count="models-list">0</span> selected)</summary>
-          <div id="models-list">
-            ${spinner}
-          </div>
-        </details>
-      </div>
+      <div id="package-options-container"></div>
     `;
 
     const buttonContainer = document.createElement("div");
@@ -322,9 +676,11 @@ async function createPackModal() {
 
     const { close } = createModal(modal);
 
-    const modelsList = form.querySelector("#models-list");
-    const modelListComponent = new ModelList(modelsList, "models-list");
-    modelListComponent.load().then(() => {
+    const packageOptionsContainer = form.querySelector("#package-options-container");
+    const packageOptions = new PackageOptions(form, "pack-models-list", "pack-files-list", true);
+    packageOptionsContainer.innerHTML = packageOptions.getHtml();
+    
+    packageOptions.init().then(() => {
       confirmButton.disabled = false;
     });
 
@@ -333,10 +689,13 @@ async function createPackModal() {
       if (filename) {
         // Save filename to localStorage
         localStorage.setItem('cpack-bento-name', filename);
+        const selectedData = packageOptions.getSelectedData();
         close();
         resolve({
           filename,
-          models: Array.from(form.querySelectorAll("input[name='models']:checked")).map(input => input.value)
+          models: selectedData.models,
+          files: selectedData.files,
+          systemPackages: selectedData.systemPackages
         });
       }
     };
@@ -472,7 +831,9 @@ async function packageAction() {
     const body = JSON.stringify({
       workflow,
       workflow_api,
-      models: result.models
+      models: result.models,
+      files: result.files,
+      system_packages: result.systemPackages
     });
 
     downloadModal.updateProgress(60);
@@ -591,28 +952,102 @@ const serveForm = `
 </div>
 `
 
+class PackageOptions {
+  constructor(container, modelsListId, filesListId, defaultOpen = true) {
+    this.container = container;
+    this.modelsListId = modelsListId;
+    this.filesListId = filesListId;
+    this.modelListComponent = null;
+    this.fileListComponent = null;
+  this.defaultOpen = defaultOpen;
+  }
+
+  getHtml() {
+    return `
+      <div class="cpack-form-item">
+        <details ${this.defaultOpen ? 'open' : ''}>
+          <summary style="cursor: pointer; margin-bottom: 10px;">Package Options</summary>
+          <div style="padding: 10px; background: #1d1d1d; border-radius: 4px;">
+            <div class="cpack-form-item">
+              <details>
+                <summary style="cursor: pointer; margin-bottom: 10px;">Models (<span data-models-count="${this.modelsListId}">0</span> selected)</summary>
+                <div id="${this.modelsListId}">
+                  ${spinner}
+                </div>
+              </details>
+            </div>
+            <div class="cpack-form-item">
+              <details>
+                <summary style="cursor: pointer; margin-bottom: 10px;">Input Files (<span data-files-count="${this.filesListId}">0</span> selected)</summary>
+                <div id="${this.filesListId}">
+                  ${spinner}
+                </div>
+              </details>
+            </div>
+            <div class="cpack-form-item">
+              <details>
+                <summary style="cursor: pointer; margin-bottom: 10px;">System Packages</summary>
+                <div id="system-packages-array" style="padding: 10px;">
+                  <button class="cpack-btn" id="add-button" style="margin: 5px 0px">Add Package</button>
+                </div>
+              </details>
+            </div>
+          </div>
+        </details>
+      </div>
+    `;
+  }
+
+  async init() {
+    const modelsList = this.container.querySelector(`#${this.modelsListId}`);
+    const filesList = this.container.querySelector(`#${this.filesListId}`);
+    
+    this.modelListComponent = new ModelList(modelsList, this.modelsListId);
+    this.fileListComponent = new FileTreeList(filesList, this.filesListId);
+
+    const addButton = this.container.querySelector("#add-button");
+    const systemPackagesArray = this.container.querySelector("#system-packages-array");
+    
+    addButton.addEventListener("click", (e) => {
+      e.preventDefault();
+      const row = document.createElement("div");
+      row.className = "cpack-input-row";
+      row.innerHTML = `
+        <div style="flex: 1"><input type="text" class="cpack-input" name="systemPackages" placeholder="package name in Ubuntu" /></div>
+        <button class="cpack-btn" style="margin-left: 10px">Remove</button>
+      `
+      systemPackagesArray.appendChild(row);
+      row.querySelector("button").onclick = (e) => {
+        e.preventDefault();
+        row.remove();
+      }
+    });
+
+    await Promise.all([
+      this.modelListComponent.load(),
+      this.fileListComponent.load()
+    ]);
+  }
+
+  getSelectedData() {
+    return {
+      models: this.modelListComponent.getSelectedModels(),
+      files: this.fileListComponent.getSelectedFiles(),
+      systemPackages: Array.from(this.container.querySelectorAll("input[name='systemPackages']"))
+        .map(input => input.value)
+        .filter(Boolean)
+    };
+  }
+}
+
 const buildForm = `
   <p style="font-size: 0.85em; color: #888; margin-top: 5px;">
     This feature is powered by <a href="https://www.bentoml.com/?from=comfy-pack" target="_blank" style="color: #00a67d;">BentoCloud</a>, a platform for deploying <br>and managing ML services in customizable clusters
   </p>
 <div class="cpack-form-item required">
-  <label for="bentoName">Bento Name</label>
+  <label for="bentoName">Name</label>
   <input type="text" class="cpack-input" name="bentoName" placeholder="comfy-pack-app" />
-  <div class="error-message">Bento name is required</div>
-</div>
-<div class="cpack-form-item">
-  <details>
-    <summary style="cursor: pointer; margin-bottom: 10px;">Models (<span data-models-count="build-models-list">0</span> selected)</summary>
-    <div id="build-models-list">
-      ${spinner}
-    </div>
-  </details>
-</div>
-<div class="cpack-form-item">
-  <label for="systemPackages">System Packages</label>
-  <div id="system-packages-array">
-    <button class="cpack-btn" id="add-button" style="margin: 5px 0px">Add</button>
-  </div>
+  <div class="error-message">Name is required</div>
 </div>
 <div class="cpack-form-item required">
   <label>BentoCloud API</label>
@@ -628,8 +1063,11 @@ const buildForm = `
       <p style="font-size: 0.85em; color: #888; margin-top: 5px;">
         Get your API Token at <a href="https://cloud.bentoml.com/signup?from=comfy-pack" target="_blank" style="color: #00a67d;">cloud.bentoml.com</a>
       </p>
+  
+    </div>
+
   </div>
-</div>
+  <div id="package-options-container"></div>
 `
 
 function createBuildModal() {
@@ -643,23 +1081,6 @@ function createBuildModal() {
 
   const form = document.createElement("form");
   form.innerHTML = buildForm;
-
-  const addButton = form.querySelector("#add-button");
-  const systemPackagesArray = form.querySelector("#system-packages-array");
-  addButton.addEventListener("click", (e) => {
-    e.preventDefault();
-    const row = document.createElement("div");
-    row.className = "cpack-input-row";
-    row.innerHTML = `
-      <div style="flex: 1"><input type="text" class="cpack-input" name="systemPackages" placeholder="package name in Ubuntu" /></div>
-      <button class="cpack-btn" style="margin-left: 10px">Remove</button>
-    `
-    systemPackagesArray.appendChild(row);
-    row.querySelector("button").onclick = (e) => {
-      e.preventDefault();
-      row.remove();
-    }
-  });
 
 
   const buttonContainer = document.createElement("div");
@@ -688,9 +1109,11 @@ function createBuildModal() {
   return new Promise((resolve) => {
     form.querySelector("input[name='bentoName']").select();
 
-    const modelsList = form.querySelector("#build-models-list");
-    const modelListComponent = new ModelList(modelsList, "build-models-list");
-    modelListComponent.load().then(() => {
+    const packageOptionsContainer = form.querySelector("#package-options-container");
+    const packageOptions = new PackageOptions(form, "build-models-list", "build-files-list", false);
+    packageOptionsContainer.innerHTML = packageOptions.getHtml();
+    
+    packageOptions.init().then(() => {
       confirmButton.disabled = false;
     });
 
@@ -729,13 +1152,15 @@ function createBuildModal() {
       localStorage.setItem('cpack-api-key', apiKey);
 
       const { workflow, output: workflow_api } = await app.graphToPrompt();
+      const selectedData = packageOptions.getSelectedData();
       const data = {
         bento_name: bentoName,
-        system_packages: Array.from(formData.getAll("systemPackages").filter(Boolean)),
+        system_packages: selectedData.systemPackages,
         push: true,
         api_key: apiKey,
         endpoint: endpoint,
-        models: Array.from(form.querySelectorAll("input[name='models']:checked")).map(input => input.value),
+        models: selectedData.models,
+        files: selectedData.files,
         workflow,
         workflow_api
       };

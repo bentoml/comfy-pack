@@ -88,7 +88,10 @@ def _is_file_refered(file_path: Path, workflow_api: dict) -> bool:
                 used_inputs.add(v)
     all_inputs = "\n".join(used_inputs)
     file_path = file_path.absolute().relative_to(folder_paths.base_path)
-    relpath = Path(*file_path.parts[2:])
+    if file_path.parts[0] == "input":
+        relpath = Path(*file_path.parts[1:])
+    else:  # models
+        relpath = Path(*file_path.parts[2:])
     return str(relpath) in all_inputs
 
 
@@ -217,15 +220,16 @@ async def _write_inputs(path: ZPath, data: dict) -> None:
 
     input_dir = folder_paths.get_input_directory()
 
-    used_inputs = set()
-    for node in data["workflow_api"].values():
-        for _, v in node["inputs"].items():
-            if isinstance(v, str):
-                used_inputs.add(v)
+    if "files" in data:
+        selected = "\n".join(set(data.get("files", [])))
+    else:
+        selected = None
 
     src_root = Path(input_dir).absolute()
     for src in src_root.glob("**/*"):
         rel = src.relative_to(src_root)
+        if selected is not None and str(rel) not in selected:
+            continue
         if src.is_dir():
             if isinstance(path, Path):
                 path.joinpath("input").joinpath(rel).mkdir(parents=True, exist_ok=True)
@@ -470,6 +474,35 @@ async def get_models(request):
         ensure_source=False,
     )
     return web.json_response({"models": models})
+
+
+async def _get_inputs(workflow_api):
+    input_dir = folder_paths.get_input_directory()
+    inputs = []
+    for src in Path(input_dir).rglob("*"):
+        if src.is_file():
+            rel = src.relative_to(input_dir)
+            badges = []
+            checked = False
+            if _is_file_refered(src, workflow_api):
+                badges.append({"text": "Referenced"})
+                checked = True
+            data = {
+                "path": str(rel),
+                "badges": badges,
+                "checked": checked,
+            }
+            inputs.append(data)
+    return inputs
+
+
+@PromptServer.instance.routes.post("/bentoml/file/query")
+async def get_inputs(request):
+    data = await request.json()
+    inputs = await _get_inputs(
+        workflow_api=data.get("workflow_api"),
+    )
+    return web.json_response({"files": inputs})
 
 
 @PromptServer.instance.routes.post("/bentoml/build")
