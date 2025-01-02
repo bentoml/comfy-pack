@@ -69,6 +69,9 @@ def install_custom_modules(snapshot, workspace: Path, verbose: int = 0):
     print("Installing custom nodes")
     for module in snapshot["custom_nodes"]:
         url = module["url"]
+        if not url.strip():
+            print(f"Skipping invalid custom node: {module}")
+            continue
         directory = url.split("/")[-1].split(".")[0]
         module_dir = workspace / "custom_nodes" / directory
 

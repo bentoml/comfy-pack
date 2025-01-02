@@ -195,6 +195,7 @@ async def _get_custom_nodes() -> list:
             "url": url,
             "commit_hash": commit_hash,
             "disabled": subdir.name.endswith(".disabled"),
+            "path": str(subdir.relative_to(custom_nodes)),
         }
 
     for subdir in Path(custom_nodes).iterdir():
