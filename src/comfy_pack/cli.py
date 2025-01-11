@@ -420,9 +420,9 @@ def run(ctx, cpack: str, output_dir: str, help: bool, verbose: int):
 
 
 @main.command(name="build-bento")
+@click.argument("source")
 @click.option("--name", help="Name of the bento service")
 @click.option("--version", help="Version of the bento service")
-@click.argument("source")
 def bento_cmd(source: str, name: str | None, version: str | None):
     """Build a bento from the source, which can be either a .cpack.zip file or a bento tag."""
     import bentoml
@@ -439,7 +439,7 @@ def bento_cmd(source: str, name: str | None, version: str | None):
         else:
             existing_bento = bentoml.get(source)
             name = name or existing_bento.tag.name
-            shutil.copytree(existing_bento.path, temp_dir, dirs_exist_ok=True)
+            shutil.copytree(existing_bento.path_of("src"), temp_dir, dirs_exist_ok=True)
             build_config = BentoBuildConfig.from_bento_dir(
                 existing_bento.path_of("src")
             )
