@@ -31,7 +31,7 @@ EXCLUDE_PACKAGES = ["bentoml", "onnxruntime", "conda"]  # TODO: standardize this
 
 def _get_requirement_string(dist: Distribution) -> str:
     direct_url_text = dist.read_text("direct_url.json")
-    pinned_str = f'{dist.metadata["Name"]}=={dist.version}'
+    pinned_str = f"{dist.metadata['Name']}=={dist.version}"
     if not direct_url_text:
         return pinned_str
     direct_url = json.loads(direct_url_text)
@@ -158,7 +158,7 @@ async def _get_models(
         if should_store:
             import bentoml
 
-            model_tag = f'cpack-model:{model_data["sha256"][:16]}'
+            model_tag = f"cpack-model:{model_data['sha256'][:16]}"
             try:
                 model = bentoml.models.get(model_tag)
             except bentoml.exceptions.NotFound:
@@ -277,6 +277,8 @@ class DevServer:
 
     @classmethod
     def start(cls, workflow_api: dict, port: int = 3000):
+        from comfy_pack import __file__ as comfy_pack_file
+
         cls.stop()
 
         cls.port = port
@@ -285,7 +287,7 @@ class DevServer:
         with cls.run_dir.joinpath("workflow_api.json").open("w") as f:
             f.write(json.dumps(workflow_api, indent=2))
         shutil.copy(
-            Path(__file__).with_name("service.py"),
+            Path(comfy_pack_file).with_name("service.py"),
             cls.run_dir / "service.py",
         )
         shutil.copytree(COMFY_PACK_DIR, cls.run_dir / COMFY_PACK_DIR.name)
