@@ -443,6 +443,14 @@ def bento_cmd(source: str, name: str | None, version: str | None):
             build_config = BentoBuildConfig.from_bento_dir(
                 existing_bento.path_of("src")
             )
+            if (
+                build_config.python.requirements_txt
+                and Path(build_config.python.requirements_txt).exists()
+                and "comfy-pack"
+                not in open(build_config.python.requirements_txt).read()
+            ):
+                with open(build_config.python.requirements_txt, "a") as f:
+                    f.write("\ncomfy-pack")
             system_packages = build_config.docker.system_packages
             include_default_system_packages = False
 
