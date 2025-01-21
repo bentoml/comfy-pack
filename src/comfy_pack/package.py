@@ -456,11 +456,11 @@ def build_bento(
         system_packages = system_packages or []
 
     shutil.copy2(Path(__file__).with_name("service.py"), source_dir / "service.py")
+    snapshot_text = (source_dir / "snapshot.json").read_text()
     with Path(__file__).with_name("setup_workspace.py").open() as f:
         (source_dir / "setup_workspace.py").write_text(
             f.read().format(snapshot=snapshot_text)
         )
-    snapshot_text = (source_dir / "snapshot.json").read_text()
     snapshot = json.loads(snapshot_text)
     return bentoml.build(
         "service:ComfyService",
