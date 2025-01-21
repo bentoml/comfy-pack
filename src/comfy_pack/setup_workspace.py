@@ -13,10 +13,9 @@ if virtualenv and "--reload" not in sys.argv:
     venv_python = os.path.join(virtualenv, "bin/python3")
     os.execl(venv_python, venv_python, *sys.argv, "--reload")
 
-# The script path is ./env/docker/setup_script
-SRC_DIR = Path(__file__).parent.parent.parent / "src"
-INPUT_DIR = SRC_DIR / "input"
-sys.path.append(str(SRC_DIR))
+SNAPSHOT = """\
+{snapshot}
+"""
 
 
 def _get_workspace() -> tuple[Path, dict]:
@@ -25,13 +24,12 @@ def _get_workspace() -> tuple[Path, dict]:
 
     from bentoml._internal.configuration.containers import BentoMLContainer
 
-    snapshot = SRC_DIR / "snapshot.json"
-    checksum = hashlib.md5(snapshot.read_bytes()).hexdigest()
+    checksum = hashlib.md5(SNAPSHOT.strip().encode("utf8")).hexdigest()
     wp = (
         Path(BentoMLContainer.bentoml_home.get()) / "run" / "comfy_workspace" / checksum
     )
     wp.parent.mkdir(parents=True, exist_ok=True)
-    return wp, json.loads(snapshot.read_text())
+    return wp, json.loads(SNAPSHOT)
 
 
 def prepare_comfy_workspace():
@@ -47,12 +45,6 @@ def prepare_comfy_workspace():
             print("Removing existing workspace")
             shutil.rmtree(comfy_workspace, ignore_errors=True)
         install_comfyui(snapshot, comfy_workspace, verbose=verbose)
-
-        for f in INPUT_DIR.glob("*"):
-            if f.is_file():
-                shutil.copy(f, comfy_workspace / "input" / f.name)
-            elif f.is_dir():
-                shutil.copytree(f, comfy_workspace / "input" / f.name)
 
         install_custom_modules(snapshot, comfy_workspace, verbose=verbose)
         comfy_workspace.joinpath(".DONE").touch()

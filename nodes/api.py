@@ -471,7 +471,7 @@ async def _prepare_pack(
         model_filter=model_filter,
     )
 
-    await _write_requirements(working_dir, ["comfy-cli", "fastapi"])
+    await _write_requirements(working_dir, ["comfy-cli", "fastapi", "comfy-pack"])
     await _write_snapshot(working_dir, data, models)
     await _write_workflow(working_dir, data)
     await _write_inputs(working_dir, data)

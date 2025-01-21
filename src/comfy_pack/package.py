@@ -456,11 +456,12 @@ def build_bento(
         system_packages = system_packages or []
 
     shutil.copy2(Path(__file__).with_name("service.py"), source_dir / "service.py")
-    # Copy comfy-pack package
-    shutil.copytree(
-        COMFY_PACK_DIR, source_dir / COMFY_PACK_DIR.name, dirs_exist_ok=True
-    )
-    snapshot = json.loads((source_dir / "snapshot.json").read_text())
+    with Path(__file__).with_name("setup_workspace.py").open() as f:
+        (source_dir / "setup_workspace.py").write_text(
+            f.read().format(snapshot=snapshot_text)
+        )
+    snapshot_text = (source_dir / "snapshot.json").read_text()
+    snapshot = json.loads(snapshot_text)
     return bentoml.build(
         "service:ComfyService",
         name=bento_name,
@@ -475,7 +476,7 @@ def build_bento(
         docker={
             "python_version": f"{sys.version_info.major}.{sys.version_info.minor}",
             "system_packages": system_packages,
-            "setup_script": Path(__file__).with_name("setup_workspace.py").as_posix(),
+            "setup_script": source_dir.joinpath("setup_workspace.py").as_posix(),
         },
         python={"requirements_txt": "requirements.txt", "lock_packages": True},
     )
