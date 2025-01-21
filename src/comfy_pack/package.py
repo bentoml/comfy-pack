@@ -457,10 +457,12 @@ def build_bento(
 
     shutil.copy2(Path(__file__).with_name("service.py"), source_dir / "service.py")
     snapshot_text = (source_dir / "snapshot.json").read_text()
+    setup_script = source_dir / "setup_workspace.py"
     with Path(__file__).with_name("setup_workspace.py").open() as f:
-        (source_dir / "setup_workspace.py").write_text(
-            f.read().format(snapshot=snapshot_text)
-        )
+        setup_script.write_text(f.read().format(snapshot=snapshot_text))
+    # Make setup script executable in a cross-platform way
+    if os.name in ("posix", "mac"):
+        setup_script.chmod(setup_script.stat().st_mode | 0o755)
     snapshot = json.loads(snapshot_text)
     return bentoml.build(
         "service:ComfyService",
