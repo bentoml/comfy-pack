@@ -29,24 +29,28 @@ def _clone_commit(url: str, commit: str, dir: Path, verbose: int = 0):
         ["git", "clone", "--recurse-submodules", "--filter=blob:none", url, dir],
         stdout=stdout,
         stderr=stderr,
+        env={"GIT_TERMINAL_PROMPT": "0"},
     )
     subprocess.check_call(
         ["git", "fetch", "-q", url, commit],
         cwd=dir,
         stdout=stdout,
         stderr=stderr,
+        env={"GIT_TERMINAL_PROMPT": "0"},
     )
     subprocess.check_call(
         ["git", "checkout", "FETCH_HEAD"],
         cwd=dir,
         stdout=stdout,
         stderr=stderr,
+        env={"GIT_TERMINAL_PROMPT": "0"},
     )
     subprocess.check_call(
         ["git", "submodule", "update", "--init", "--recursive"],
         cwd=dir,
         stdout=stdout,
         stderr=stderr,
+        env={"GIT_TERMINAL_PROMPT": "0"},
     )
 
 
