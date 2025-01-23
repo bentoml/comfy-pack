@@ -37,7 +37,7 @@ def prepare_comfy_workspace():
 
     from comfy_pack.package import install_comfyui, install_custom_modules
 
-    verbose = int("BENTOML_DEBUG" in os.environ)
+    verbose = 2
     comfy_workspace, snapshot = _get_workspace()
 
     if not comfy_workspace.joinpath(".DONE").exists():
