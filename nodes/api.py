@@ -48,10 +48,21 @@ def _get_requirement_string(dist: Distribution) -> str:
         return pinned_str
 
 
+def normalize_name(name: str) -> str:
+    import re
+
+    return re.sub(r"[-_.]+", "-", name).lower()
+
+
 async def _write_requirements(path: ZPath, extras: list[str] | None = None) -> None:
     print("Package => Writing requirements.txt")
+    seen_packages: set[str] = set(EXCLUDE_PACKAGES)
     with path.joinpath("requirements.txt").open("w") as f:
         for dist in distributions():
+            pkg_name = normalize_name(dist.metadata["Name"])
+            if pkg_name in seen_packages:
+                continue
+            seen_packages.add(pkg_name)
             f.write(_get_requirement_string(dist) + "\n")
         if extras:
             f.write("\n".join(extras) + "\n")
