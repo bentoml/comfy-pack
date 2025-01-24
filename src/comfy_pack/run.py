@@ -206,6 +206,7 @@ def run_workflow(
     output_dir: Union[str, Path, None] = None,
     timeout: int = 300,
     verbose: int = 0,
+    workspace: str = ".",
     **kwargs: Any,
 ) -> Any:
     """
@@ -258,6 +259,8 @@ def run_workflow(
     command = [
         "comfy",
         "--skip-prompt",
+        "--workspace",
+        workspace,
         "run",
         "--workflow",
         workflow_file_path.as_posix(),

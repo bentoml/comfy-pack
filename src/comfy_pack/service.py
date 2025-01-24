@@ -73,7 +73,7 @@ else:
     snapshot = {}
 
 
-@bentoml.mount_asgi_app(app, path="/comfy")
+@bentoml.asgi_app(app, path="/comfy")
 @bentoml.service(traffic={"timeout": REQUEST_TIMEOUT * 2}, resources={"gpu": 1})
 class ComfyService:
     def __init__(self):
@@ -122,6 +122,7 @@ class ComfyService:
             output_dir=ctx.temp_dir,
             timeout=REQUEST_TIMEOUT,
             verbose=verbose,
+            workspace=self.server.workspace,
             **kwargs,
         )
         if isinstance(ret, list):

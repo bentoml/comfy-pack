@@ -404,6 +404,7 @@ def run(ctx, cpack: str, output_dir: str, help: bool, verbose: int):
             workflow,
             Path(output_dir).absolute(),
             verbose=verbose,
+            workspace=server.workspace,
             **validated_data.model_dump(),
         )
         console.print("\n[green]✓ Workflow is executed successfully![/green]")
