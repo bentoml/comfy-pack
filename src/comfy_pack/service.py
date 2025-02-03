@@ -129,13 +129,6 @@ class ComfyService:
             ret = ret[-1]
         return ret
 
-    @bentoml.on_shutdown
-    def on_shutdown(self):
-        logger.info("Shutting down")
-        if not EXISTING_COMFYUI_SERVER:
-            self.watch_thread.join()
-            logger.info("Watch thread finished")
-
     @bentoml.on_deployment
     @staticmethod
     def prepare_models():
