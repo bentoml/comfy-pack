@@ -40,7 +40,7 @@ def _get_workspace() -> Path:
     from bentoml._internal.configuration.containers import BentoMLContainer
 
     snapshot = BASE_DIR / "snapshot.json"
-    checksum = hashlib.md5(snapshot.read_bytes()).hexdigest()
+    checksum = hashlib.md5(snapshot.read_bytes().strip()).hexdigest()
     wp = (
         Path(BentoMLContainer.bentoml_home.get()) / "run" / "comfy_workspace" / checksum
     )
