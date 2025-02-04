@@ -22,12 +22,12 @@ def _get_workspace() -> tuple[Path, dict]:
     import hashlib
     import json
 
-    from bentoml._internal.configuration.containers import BentoMLContainer
+    bentoml_home = os.getenv(
+        "BENTOML_HOME", os.path.join(os.path.expanduser("~"), "bentoml")
+    )
 
     checksum = hashlib.md5(SNAPSHOT.strip().encode("utf8")).hexdigest()
-    wp = (
-        Path(BentoMLContainer.bentoml_home.get()) / "run" / "comfy_workspace" / checksum
-    )
+    wp = Path(bentoml_home) / "run" / "comfy_workspace" / checksum
     wp.parent.mkdir(parents=True, exist_ok=True)
     return wp, json.loads(SNAPSHOT)
 
