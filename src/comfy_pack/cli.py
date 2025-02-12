@@ -6,6 +6,7 @@ import subprocess
 import sys
 import tempfile
 from pathlib import Path
+from typing import cast
 
 import click
 
@@ -461,3 +462,82 @@ def bento_cmd(source: str, name: str | None, version: str | None):
             system_packages=system_packages,
             include_default_system_packages=include_default_system_packages,
         )
+
+
+def setup_cloud_client(
+    ctx: click.Context, param: click.Parameter, value: str | None
+) -> str | None:
+    from bentoml._internal.configuration.containers import BentoMLContainer
+
+    if value:
+        BentoMLContainer.cloud_context.set(value)
+        os.environ["BENTOML_CLOUD_CONTEXT"] = value
+    return value
+
+
+@main.command()
+@click.argument("bento")
+@click.option(
+    "-w",
+    "--workspace",
+    type=click.Path(file_okay=False),
+    default="workspace",
+    help="Workspace directory, defaults to './workspace'.",
+)
+@click.option("-v", "--verbose", count=True, help="Increase verbosity level")
+@click.option(
+    "--context",
+    help="BentoCloud context name.",
+    expose_value=False,
+    callback=setup_cloud_client,
+)
+def unpack_bento(bento: str, workspace: str, verbose: int):
+    """Restore the ComfyUI workspace from a given bento."""
+    import bentoml
+
+    from .package import install_comfyui, install_custom_modules, install_dependencies
+
+    bento_obj = bentoml.get(bento)
+    comfy_workspace = Path(workspace)
+    comfy_workspace.parent.mkdir(parents=True, exist_ok=True)
+    if not comfy_workspace.joinpath(".DONE").exists():
+        for model in bento_obj.info.models:
+            model.to_model().resolve()
+        snapshot = json.loads(Path(bento_obj.path_of("src/snapshot.json")).read_text())
+        install_comfyui(snapshot, comfy_workspace, verbose=verbose)
+        reqs_txt = bento_obj.path_of("env/python/requirements.txt")
+        install_dependencies(snapshot, reqs_txt, comfy_workspace, verbose=verbose)
+
+        for f in Path(bento_obj.path_of("src/input")).glob("*"):
+            if f.is_file():
+                shutil.copy(f, comfy_workspace / "input" / f.name)
+            elif f.is_dir():
+                shutil.copytree(
+                    f, comfy_workspace / "input" / f.name, dirs_exist_ok=True
+                )
+        install_custom_modules(snapshot, comfy_workspace, verbose=verbose)
+        for model in snapshot["models"]:
+            if model.get("disabled", False):
+                continue
+            model_path = comfy_workspace / cast(str, model["filename"])
+            if model_path.exists():
+                continue
+            if model_tag := model.get("model_tag"):
+                model_path.parent.mkdir(parents=True, exist_ok=True)
+                bento_model = bentoml.models.get(model_tag)
+                model_file = bento_model.path_of("model.bin")
+                click.echo(f"Copying {model_file} to {model_path}")
+                model_path.symlink_to(model_file)
+            else:
+                click.echo("WARN: Unrecognized model source, the model may be missing")
+        comfy_workspace.joinpath(".DONE").touch()
+
+    if os.name == "nt":
+        exe = "Scripts/python.exe"
+    else:
+        exe = "bin/python"
+    click.echo(
+        f"Workspace is ready at {comfy_workspace}\n"
+        f"You can start ComfyUI by running `cd {comfy_workspace} && .venv/{exe} main.py`",
+        color="green",
+    )
