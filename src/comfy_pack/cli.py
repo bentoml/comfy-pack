@@ -506,6 +506,11 @@ def unpack_bento(bento: str, workspace: str, verbose: int):
         snapshot = json.loads(Path(bento_obj.path_of("src/snapshot.json")).read_text())
         install_comfyui(snapshot, comfy_workspace, verbose=verbose)
         reqs_txt = bento_obj.path_of("env/python/requirements.txt")
+        if sys.platform != "linux":
+            src_reqs_txt = bento_obj.path_of("src/requirements.txt")
+            if os.path.exists(src_reqs_txt):
+                click.echo("Using requirements.txt from src directory")
+                reqs_txt = src_reqs_txt
         install_dependencies(snapshot, reqs_txt, comfy_workspace, verbose=verbose)
 
         for f in Path(bento_obj.path_of("src/input")).glob("*"):
