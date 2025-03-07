@@ -5,6 +5,7 @@ import shutil
 import subprocess
 import sys
 import tempfile
+import zipfile
 from pathlib import Path
 from typing import cast
 
@@ -31,6 +32,7 @@ def _ensure_uv() -> None:
 
 
 @click.group()
+@click.version_option()
 def main():
     """comfy-pack CLI"""
     pass
@@ -352,10 +354,8 @@ def run(ctx, cpack: str, output_dir: str, help: bool, verbose: int):
 
     console = Console()
 
-    with tempfile.TemporaryDirectory() as temp_dir:
-        pack_dir = Path(temp_dir) / ".cpack"
-        shutil.unpack_archive(cpack, pack_dir)
-        workflow = json.loads((pack_dir / "workflow_api.json").read_text())
+    with zipfile.ZipFile(cpack) as z:
+        workflow = json.loads(z.read("workflow_api.json"))
 
     input_model = generate_input_model(workflow)
 
@@ -497,7 +497,15 @@ def unpack_bento(bento: str, workspace: str, verbose: int):
 
     from .package import install_comfyui, install_custom_modules, install_dependencies
 
-    bento_obj = bentoml.get(bento)
+    try:
+        bento_obj = bentoml.get(bento)
+    except bentoml.exceptions.NotFound:
+        click.echo(
+            f"Bento {bento} not found in the local repository, trying to pull from BentoCloud",
+            err=True,
+        )
+        bentoml.pull(bento)
+        bento_obj = bentoml.get(bento)
     comfy_workspace = Path(workspace)
     comfy_workspace.parent.mkdir(parents=True, exist_ok=True)
     if not comfy_workspace.joinpath(".DONE").exists():
