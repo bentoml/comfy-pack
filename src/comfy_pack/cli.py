@@ -512,6 +512,7 @@ def unpack_bento(bento: str, workspace: Path, verbose: int):
             model.to_model().resolve()
         snapshot = json.loads(Path(bento_obj.path_of("src/snapshot.json")).read_text())
         install_comfyui(snapshot, workspace, verbose=verbose)
+        workspace.joinpath(".DONE").unlink()  # created by install_comfyui
         reqs_txt = bento_obj.path_of("env/python/requirements.txt")
         if sys.platform != "linux":
             src_reqs_txt = bento_obj.path_of("src/requirements.txt")
@@ -540,7 +541,7 @@ def unpack_bento(bento: str, workspace: Path, verbose: int):
                 model_path.symlink_to(model_file)
             else:
                 click.echo("WARN: Unrecognized model source, the model may be missing")
-        workspace.joinpath(".DONE").touch()
+        workspace.joinpath(".DONE").write_text(snapshot["comfyui"])
 
     if os.name == "nt":
         exe = "Scripts/python.exe"
