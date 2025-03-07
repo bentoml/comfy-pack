@@ -88,6 +88,7 @@ def install_custom_modules(snapshot, workspace: Path, verbose: int = 0):
                     continue
             shutil.rmtree(module_dir)
 
+        print(f"Installing custom node {url}")
         commit_hash = module["commit_hash"]
         _clone_commit(url, commit_hash, module_dir, verbose=verbose)
 
