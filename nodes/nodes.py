@@ -3,13 +3,15 @@ import json
 import os
 import sys
 import shutil
+import zipfile
 
 import folder_paths
 import node_helpers
 import numpy as np
 import torch
-from PIL import Image, ImageOps, ImageSequence
+from PIL import Image, ImageOps, ImageSequence, PngImagePlugin
 from PIL.PngImagePlugin import PngInfo
+from io import BytesIO
 
 from .monkeypatch import set_bentoml_output
 
@@ -161,6 +163,86 @@ class OutputImage:
             counter += 1
 
         return {"ui": {"images": results}}
+
+
+class OutputImageWithStringTxt:
+    COLOR = (142, 36, 170)
+
+    def __init__(self):
+        self.output_dir = folder_paths.get_output_directory()
+        self.type = "output"
+        self.prefix_append = ""
+        self.compress_level = 4
+
+    @classmethod
+    def INPUT_TYPES(s):
+        return {
+            "required": {
+                "images": ("IMAGE", {"tooltip": "The images to save."}),
+                "filename_prefix": ("STRING", {"default": "cpack_output_"}),
+                "text": ("STRING", {"default": ""}),
+            },
+            "hidden": {
+                "prompt": "PROMPT",
+                "extra_pnginfo": "EXTRA_PNGINFO",
+            },
+        }
+
+    RETURN_TYPES = ()
+    FUNCTION = "save_images"
+    CPACK_NODE = True
+    OUTPUT_NODE = True
+
+    CATEGORY = "ComfyPack/output"
+    DESCRIPTION = "Saves the input images (and optional text) to your ComfyUI output directory."
+
+    def save_images(self, images, filename_prefix="cpack_output_", text="", prompt=None, extra_pnginfo=None):
+        filename_prefix += self.prefix_append
+        full_output_folder, filename, counter, subfolder, filename_prefix = (
+            get_save_image_path(
+                filename_prefix, self.output_dir, images[0].shape[1], images[0].shape[0]
+            )
+        )
+
+        base_counter = counter  # use for name zip
+        zip_filename = f"{filename}_batch_{base_counter:05}.zip"
+        zip_path = os.path.join(full_output_folder, zip_filename)
+
+        # create ZIP file
+        with zipfile.ZipFile(zip_path, 'w', zipfile.ZIP_DEFLATED) as zipf:
+            for batch_number, image in enumerate(images):
+                # temp store img to RAM
+                i = 255.0 * image.cpu().numpy()
+                img = Image.fromarray(np.clip(i, 0, 255).astype(np.uint8))
+
+                # write meta data
+                metadata = PngImagePlugin.PngInfo()
+                if prompt is not None:
+                    metadata.add_text("prompt", json.dumps(prompt))
+                if extra_pnginfo is not None:
+                    for x in extra_pnginfo:
+                        metadata.add_text(x, json.dumps(extra_pnginfo[x]))
+
+                # write img file to RAM buffer
+                img_buffer = BytesIO()
+                img.save(img_buffer, format="PNG", pnginfo=metadata, compress_level=self.compress_level)
+                img_buffer.seek(0)
+
+                # write img into ZIP file
+                image_filename = f"image_{batch_number:05}.png"
+                zipf.writestr(image_filename, img_buffer.read())
+
+                # write txt into ZIP file
+                text_filename = f"text_{batch_number:05}.txt"
+                zipf.writestr(text_filename, text)
+
+        # return zip as output
+        out = [{"filename": zip_filename, "subfolder": subfolder, "type": "zip"}]
+        return {
+            "ui": {
+                "zip": out,
+            }
+        }
 
 
 class ImageInput:
@@ -356,6 +438,7 @@ class AnyInput:
 NODE_CLASS_MAPPINGS = {
     "CPackOutputFile": OutputFile,
     "CPackOutputImage": OutputImage,
+    "CPackOutputZip": OutputImageWithStringTxt,
     "CPackInputImage": ImageInput,
     "CPackInputString": StringInput,
     "CPackInputInt": IntInput,
@@ -371,4 +454,5 @@ NODE_DISPLAY_NAME_MAPPINGS = {
     "CPackInputAny": "Any Input",
     "CPackOutputImage": "Image Output",
     "CPackOutputFile": "File Output",
+    "CPackOutputZip": "Zip Output(img + txt file)",
 }

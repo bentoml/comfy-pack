@@ -12,6 +12,7 @@ if TYPE_CHECKING:
 CPACK_OUTPUT_NODES = {
     "CPackOutputFile",
     "CPackOutputImage",
+    "CPackOutputZip"
 }
 
 CPACK_PATH_INPUT_NODES = {
