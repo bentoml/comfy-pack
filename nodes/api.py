@@ -11,7 +11,7 @@ import tempfile
 import time
 import uuid
 import zipfile
-from importlib.metadata import Distribution, distributions
+from fnmatch import fnmatch
 from pathlib import Path
 from typing import Any, Union
 
@@ -26,26 +26,7 @@ from comfy_pack.package import build_bento
 ZPath = Union[Path, zipfile.Path]
 TEMP_FOLDER = Path(__file__).parent.parent / "temp"
 COMFY_PACK_DIR = Path(__file__).parent.parent / "src" / "comfy_pack"
-EXCLUDE_PACKAGES = ["bentoml", "onnxruntime", "conda"]  # TODO: standardize this
-
-
-def _get_requirement_string(dist: Distribution) -> str:
-    direct_url_text = dist.read_text("direct_url.json")
-    pinned_str = f"{dist.metadata['Name']}=={dist.version}"
-    if not direct_url_text:
-        return pinned_str
-    direct_url = json.loads(direct_url_text)
-    if url := direct_url.get("url"):
-        if url.startswith("file://"):
-            # we are not able to share local files
-            return pinned_str
-        if vcs_info := direct_url.get("vcs_info"):
-            url = f"{vcs_info['vcs']}+{url}@{vcs_info['commit_id']}"
-        if subdirectory := direct_url.get("subdirectory"):
-            url += f"#subdirectory={subdirectory}"
-        return f"{dist.metadata['Name']} @ {url}"
-    else:
-        return pinned_str
+EXCLUDE_PACKAGES = ["bentoml", "onnxruntime", "conda", "nvidia-*"]
 
 
 def normalize_name(name: str) -> str:
@@ -54,36 +35,57 @@ def normalize_name(name: str) -> str:
     return re.sub(r"[-_.]+", "-", name).lower()
 
 
-async def _write_requirements(path: ZPath, extras: list[str] | None = None) -> None:
-    print("Package => Writing requirements.txt")
-    seen_packages: set[str] = set(EXCLUDE_PACKAGES)
-    with path.joinpath("requirements.txt").open("w") as f:
-        for dist in distributions():
-            pkg_name = normalize_name(dist.metadata["Name"])
-            if pkg_name in seen_packages:
-                continue
-            seen_packages.add(pkg_name)
-            f.write(_get_requirement_string(dist) + "\n")
-        if extras:
-            f.write("\n".join(extras) + "\n")
+def get_snapshot_path() -> Path | None:
+    manager_file_path = Path(
+        folder_paths.get_user_directory(), "default", "ComfyUI-Manager"
+    )
+    return manager_file_path / "snapshots"
+
+
+async def _save_snapshot() -> dict[str, Any]:
+    save_snapshot_route = next(
+        (
+            route
+            for route in PromptServer.instance.routes
+            if route.path == "/snapshot/save"
+        ),
+        None,
+    )
+    if not save_snapshot_route:
+        raise RuntimeError("ComfyUI-Manager must be installed to save snapshot")
+    await save_snapshot_route.handler(None)
+    snapshot_path = get_snapshot_path()
+    if not snapshot_path.exists():
+        raise RuntimeError("Snapshot save failed")
+
+    most_recent = max(
+        snapshot_path.glob("*.json"), key=lambda x: x.stat().st_mtime, default=None
+    )
+    if not most_recent:
+        raise RuntimeError("Snapshot save failed")
+    with most_recent.open("r") as f:
+        return json.load(f)
 
 
 async def _write_snapshot(path: ZPath, data: dict, models: list | None = None) -> None:
-    proc = await asyncio.subprocess.create_subprocess_exec(
-        "git", "rev-parse", "HEAD", stdout=subprocess.PIPE, cwd=folder_paths.base_path
-    )
-    stdout, _ = await proc.communicate()
+    snapshot = await _save_snapshot()
     if models is None:
         print("Package => Writing models")
         models = await _get_models()
+    for package in list(snapshot["pips"]):
+        if any(
+            fnmatch(normalize_name(package.split("==")[0]), pat)
+            for pat in EXCLUDE_PACKAGES
+        ):
+            del snapshot["pips"][package]
     with path.joinpath("snapshot.json").open("w") as f:
-        data = {
-            "python": f"{sys.version_info.major}.{sys.version_info.minor}",
-            "comfyui": stdout.decode().strip(),
-            "models": models,
-            "custom_nodes": await _get_custom_nodes(),
-        }
-        f.write(json.dumps(data, indent=2))
+        snapshot.update(
+            {
+                "python": f"{sys.version_info.major}.{sys.version_info.minor}",
+                "models": models,
+            }
+        )
+        f.write(json.dumps(snapshot, indent=2))
 
 
 def _is_port_in_use(port: int | str, host="localhost"):
@@ -160,6 +162,7 @@ async def _get_models(
             model_data["sha256"],
             cache_only=not ensure_source,
         )
+        model_data["source"] = {}
         # should_store = store_models and (
         #     model_data["source"].get("source") != "huggingface"
         #     or model_data["source"].get("repo", "").startswith("datasets/")
@@ -183,47 +186,6 @@ async def _get_models(
         for model in models:
             model["refered"] = _is_file_refered(Path(model["filename"]), workflow_api)
     return models
-
-
-async def _get_custom_nodes() -> list:
-    print("Package => Writing custom nodes")
-    custom_nodes = os.path.join(folder_paths.base_path, "custom_nodes")
-    coros = []
-
-    async def get_node_info(subdir: Path) -> dict:
-        proc = await asyncio.subprocess.create_subprocess_exec(
-            "git",
-            "config",
-            "--get",
-            "remote.origin.url",
-            cwd=subdir,
-            stdout=subprocess.PIPE,
-        )
-        stdout, _ = await proc.communicate()
-        url = stdout.decode().strip()
-
-        proc = await asyncio.subprocess.create_subprocess_exec(
-            "git",
-            "rev-parse",
-            "HEAD",
-            cwd=subdir,
-            stdout=subprocess.PIPE,
-        )
-        stdout, _ = await proc.communicate()
-        commit_hash = stdout.decode().strip()
-        return {
-            "url": url,
-            "commit_hash": commit_hash,
-            "disabled": subdir.name.endswith(".disabled"),
-            "path": str(subdir.relative_to(custom_nodes)),
-        }
-
-    for subdir in Path(custom_nodes).iterdir():
-        if not subdir.is_dir() or not subdir.joinpath(".git").exists():
-            continue
-        coros.append(get_node_info(subdir))
-
-    return await asyncio.gather(*coros)
 
 
 async def _write_workflow(path: ZPath, data: dict) -> None:
@@ -449,7 +411,7 @@ async def serve(request):
         )
 
 
-@PromptServer.instance.routes.post("/bentoml/serve/heartbeat")
+@PromptServer.instance.routes.get("/bentoml/serve/heartbeat")
 async def heartbeat(_):
     running = DevServer.feed_watch_dog()
 
@@ -482,7 +444,6 @@ async def _prepare_pack(
         model_filter=model_filter,
     )
 
-    await _write_requirements(working_dir, ["comfy-cli", "fastapi", "comfy-pack"])
     await _write_snapshot(working_dir, data, models)
     await _write_workflow(working_dir, data)
     await _write_inputs(working_dir, data)
