@@ -68,9 +68,7 @@ def install_comfyui(snapshot, workspace: Path, verbose: int = 0):
         shutil.rmtree(workspace)
     _clone_commit(COMFYUI_REPO, comfyui_commit, workspace, verbose=verbose)
     manager_node = next(
-        url
-        for url in snapshot.get("git_custom_nodes", {})
-        if url.endswith("ComfyUI-Manager.git")
+        url for url in snapshot.get("git_custom_nodes", {}) if "ComfyUI-Manager" in url
     )
     if manager_node:
         manager_commit = snapshot["git_custom_nodes"][manager_node]["hash"].strip()
