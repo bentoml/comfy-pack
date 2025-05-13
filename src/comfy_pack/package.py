@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import contextlib
 import json
 import os
 import shutil
@@ -402,14 +403,20 @@ def install(
     cpack: str | Path,
     workspace: str | Path = "workspace",
     preheat: bool = True,
+    prepare_models: bool = True,
     all_models: bool = False,
     verbose: int = 0,
 ):
     workspace = Path(workspace)
+    cpack = Path(cpack)
     print(f"Installing package {cpack} to {workspace} (verbose={verbose})")
-    with tempfile.TemporaryDirectory() as temp_dir:
-        pack_dir = Path(temp_dir) / ".cpack"
-        shutil.unpack_archive(cpack, pack_dir)
+    with contextlib.ExitStack() as stack:
+        if cpack.is_file():
+            temp_dir = stack.enter_context(tempfile.TemporaryDirectory())
+            pack_dir = Path(temp_dir) / ".cpack"
+            shutil.unpack_archive(cpack, pack_dir)
+        else:
+            pack_dir = cpack
         snapshot = json.loads((pack_dir / "snapshot.json").read_text())
         if "pips" not in snapshot:
             raise RuntimeError(
@@ -434,13 +441,13 @@ def install(
                 shutil.copy(f, workspace / "input" / f.name)
             elif f.is_dir():
                 shutil.copytree(f, workspace / "input" / f.name, dirs_exist_ok=True)
-
-        retrieve_models(
-            snapshot,
-            workspace,
-            verbose=verbose,
-            download=False,
-        )
+        if prepare_models:
+            retrieve_models(
+                snapshot,
+                workspace,
+                verbose=verbose,
+                download=False,
+            )
 
         if preheat:
             from .run import ComfyUIServer
@@ -451,8 +458,8 @@ def install(
                 venv=str(workspace / ".venv"),
             ) as _:
                 pass
-
-        retrieve_models(snapshot, workspace, verbose=verbose, all_models=all_models)
+        if prepare_models:
+            retrieve_models(snapshot, workspace, verbose=verbose, all_models=all_models)
 
 
 required_files = ["snapshot.json"]
@@ -488,9 +495,11 @@ def build_bento(
 
     shutil.copy2(Path(__file__).with_name("service.py"), source_dir / "service.py")
     snapshot_text = (source_dir / "snapshot.json").read_text()
-    setup_script = source_dir / "setup_workspace.py"
-    with Path(__file__).with_name("setup_workspace.py").open() as f:
-        setup_script.write_text(f.read().format(snapshot=snapshot_text))
+    setup_script = source_dir / "setup_workspace.sh"
+    with Path(__file__).with_name("setup_workspace.sh").open() as f:
+        setup_script.write_text(
+            f.read().replace("<SNAPSHOT>", snapshot_text.rstrip("\n"))
+        )
     # Make setup script executable in a cross-platform way
     if os.name in ("posix", "mac"):
         setup_script.chmod(setup_script.stat().st_mode | 0o755)
@@ -509,7 +518,7 @@ def build_bento(
         docker={
             "python_version": f"{sys.version_info.major}.{sys.version_info.minor}",
             "system_packages": system_packages,
-            "setup_script": source_dir.joinpath("setup_workspace.py").as_posix(),
+            "setup_script": source_dir.joinpath("setup_workspace.sh").as_posix(),
         },
         python={
             "lock_packages": True,

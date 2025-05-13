@@ -7,7 +7,6 @@ import sys
 import tempfile
 import zipfile
 from pathlib import Path
-from typing import cast
 
 import click
 
@@ -58,27 +57,25 @@ def main():
 def init(dir: str, verbose: int):
     import os
 
-    from rich.console import Console
-
-    console = Console()
+    import rich
 
     # Check if directory path is valid
     try:
         install_dir = Path(dir).absolute()
         if install_dir.exists() and not install_dir.is_dir():
-            console.print(f"[red]Error: {dir} exists but is not a directory[/red]")
+            rich.print(f"[red]Error: {dir} exists but is not a directory[/red]")
             return 1
 
         # Check if directory is empty or contains ComfyUI
         if install_dir.exists():
             contents = list(install_dir.iterdir())
             if contents and not (install_dir / ".git").exists():
-                console.print(
+                rich.print(
                     f"[red]Error: Directory {dir} is not empty and doesn't appear to be a ComfyUI installation[/red]"
                 )
                 return 1
     except Exception as e:
-        console.print(f"[red]Error: Invalid directory path - {str(e)}[/red]")
+        rich.print(f"[red]Error: Invalid directory path - {str(e)}[/red]")
         return 1
 
     # Check git installation
@@ -259,23 +256,36 @@ def init(dir: str, verbose: int):
     is_flag=True,
 )
 @click.option(
+    "--no-models",
+    default=False,
+    type=click.BOOL,
+    is_flag=True,
+    help="Do not install models",
+)
+@click.option(
     "--verbose",
     "-v",
     count=True,
     help="Increase verbosity level (use multiple times for more verbosity)",
 )
-def unpack_cmd(cpack: str, dir: str, include_disabled_models: bool, verbose: int):
-    from rich.console import Console
+def unpack_cmd(
+    cpack: str, dir: str, include_disabled_models: bool, no_models: bool, verbose: int
+):
+    import rich
 
     from .package import install
 
-    console = Console()
+    install(
+        cpack,
+        dir,
+        verbose=verbose,
+        all_models=include_disabled_models,
+        prepare_models=not no_models,
+    )
+    rich.print("\n[green]✓ ComfyUI Workspace is restored![/green]")
+    rich.print(f"{dir}")
 
-    install(cpack, dir, verbose=verbose, all_models=include_disabled_models)
-    console.print("\n[green]✓ ComfyUI Workspace is restored![/green]")
-    console.print(f"{dir}")
-
-    console.print(
+    rich.print(
         "\n[green] Next steps: [/green]\n"
         "1. Change directory to the restored workspace\n"
         "2. Source the virtual environment by running `source .venv/bin/activate`\n"
@@ -284,7 +294,7 @@ def unpack_cmd(cpack: str, dir: str, include_disabled_models: bool, verbose: int
 
 
 def _print_schema(schema, verbose: int = 0):
-    from rich.console import Console
+    import rich
     from rich.table import Table
 
     table = Table(title="")
@@ -315,7 +325,7 @@ def _print_schema(schema, verbose: int = 0):
             range_str,
         )
 
-    Console().print(table)
+    rich.print(table)
 
 
 @functools.lru_cache
@@ -343,16 +353,14 @@ def _get_cache_workspace(cpack: str):
 )
 @click.pass_context
 def run(ctx, cpack: str, output_dir: str, help: bool, verbose: int):
+    import rich
     from pydantic import ValidationError
-    from rich.console import Console
 
     from .utils import generate_input_model
 
     inputs = dict(
         zip([k.lstrip("-").replace("-", "_") for k in ctx.args[::2]], ctx.args[1::2])
     )
-
-    console = Console()
 
     with zipfile.ZipFile(cpack) as z:
         workflow = json.loads(z.read("workflow_api.json"))
@@ -361,24 +369,24 @@ def run(ctx, cpack: str, output_dir: str, help: bool, verbose: int):
 
     # If help is requested, show command help and input schema
     if help:
-        console.print(
+        rich.print(
             'Usage: comfy-pack run [OPTIONS] CPACK --input1 "value1" --input2 "value2" ...'
         )
-        console.print("Run a ComfyUI package with the given inputs:")
+        rich.print("Run a ComfyUI package with the given inputs:")
         _print_schema(input_model.model_json_schema(), verbose)
         return 0
 
     try:
         validated_data = input_model(**inputs)
-        console.print("[green]✓ Input is valid![/green]")
+        rich.print("[green]✓ Input is valid![/green]")
         for field, value in validated_data.model_dump().items():
-            console.print(f"{field}: {value}")
+            rich.print(f"{field}: {value}")
     except ValidationError as e:
-        console.print("[red]✗ Validation failed![/red]")
+        rich.print("[red]✗ Validation failed![/red]")
         for error in e.errors():
-            console.print(f"- {error['loc'][0]}: {error['msg']}")
+            rich.print(f"- {error['loc'][0]}: {error['msg']}")
 
-        console.print("\n[yellow]Expected inputs:[/yellow]")
+        rich.print("\n[yellow]Expected inputs:[/yellow]")
         _print_schema(input_model.model_json_schema(), verbose)
         return 1
 
@@ -495,7 +503,7 @@ def unpack_bento(bento: str, workspace: Path, verbose: int):
     """Restore the ComfyUI workspace from a given bento."""
     import bentoml
 
-    from .package import install_comfyui, install_custom_modules, install_dependencies
+    from .package import install
 
     try:
         bento_obj = bentoml.get(bento)
@@ -506,42 +514,8 @@ def unpack_bento(bento: str, workspace: Path, verbose: int):
         )
         bentoml.pull(bento)
         bento_obj = bentoml.get(bento)
-    workspace.parent.mkdir(parents=True, exist_ok=True)
-    if not workspace.joinpath(".DONE").exists():
-        for model in bento_obj.info.models:
-            model.to_model().resolve()
-        snapshot = json.loads(Path(bento_obj.path_of("src/snapshot.json")).read_text())
-        install_comfyui(snapshot, workspace, verbose=verbose)
-        workspace.joinpath(".DONE").unlink()  # created by install_comfyui
-        reqs_txt = bento_obj.path_of("env/python/requirements.txt")
-        if sys.platform != "linux":
-            src_reqs_txt = bento_obj.path_of("src/requirements.txt")
-            if os.path.exists(src_reqs_txt):
-                click.echo("Using requirements.txt from src directory")
-                reqs_txt = src_reqs_txt
-        install_dependencies(snapshot, reqs_txt, workspace, verbose=verbose)
 
-        for f in Path(bento_obj.path_of("src/input")).glob("*"):
-            if f.is_file():
-                shutil.copy(f, workspace / "input" / f.name)
-            elif f.is_dir():
-                shutil.copytree(f, workspace / "input" / f.name, dirs_exist_ok=True)
-        install_custom_modules(snapshot, workspace, verbose=verbose)
-        for model in snapshot["models"]:
-            if model.get("disabled", False):
-                continue
-            model_path = workspace / cast(str, model["filename"])
-            if model_path.exists():
-                continue
-            if model_tag := model.get("model_tag"):
-                model_path.parent.mkdir(parents=True, exist_ok=True)
-                bento_model = bentoml.models.get(model_tag)
-                model_file = bento_model.path_of("model.bin")
-                click.echo(f"Copying {model_file} to {model_path}")
-                model_path.symlink_to(model_file)
-            else:
-                click.echo("WARN: Unrecognized model source, the model may be missing")
-        workspace.joinpath(".DONE").write_text(snapshot["comfyui"])
+    install(bento_obj.path_of("src"), workspace, verbose=verbose, prepare_models=False)
 
     if os.name == "nt":
         exe = "Scripts/python.exe"
