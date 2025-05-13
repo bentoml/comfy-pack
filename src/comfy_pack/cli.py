@@ -241,7 +241,7 @@ def init(dir: str, verbose: int):
     name="unpack",
     help="Restore the ComfyUI workspace to specified directory",
 )
-@click.argument("cpack", type=click.Path(exists=True, dir_okay=False))
+@click.argument("cpack", type=click.Path(exists=True))
 @click.option(
     "--dir",
     "-d",
