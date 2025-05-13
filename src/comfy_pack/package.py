@@ -497,9 +497,7 @@ def build_bento(
     snapshot_text = (source_dir / "snapshot.json").read_text()
     setup_script = source_dir / "setup_workspace.sh"
     with Path(__file__).with_name("setup_workspace.sh").open() as f:
-        setup_script.write_text(
-            f.read().replace("<SNAPSHOT>", snapshot_text.rstrip("\n"))
-        )
+        setup_script.write_text(f.read().replace("<SNAPSHOT>", snapshot_text))
     # Make setup script executable in a cross-platform way
     if os.name in ("posix", "mac"):
         setup_script.chmod(setup_script.stat().st_mode | 0o755)

@@ -5,7 +5,7 @@ set -eo pipefail
 CPACK=/tmp/bento-cpack
 mkdir -p "$CPACK"
 
-cat > "$CPACK"/snapshot.json << EOF
+cat <<EOF | head -c -1 > "$CPACK"/snapshot.json
 <SNAPSHOT>
 EOF
 
