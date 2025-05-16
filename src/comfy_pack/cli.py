@@ -7,7 +7,6 @@ import sys
 import tempfile
 import zipfile
 from pathlib import Path
-from typing import cast
 
 import click
 
@@ -58,27 +57,25 @@ def main():
 def init(dir: str, verbose: int):
     import os
 
-    from rich.console import Console
-
-    console = Console()
+    import rich
 
     # Check if directory path is valid
     try:
         install_dir = Path(dir).absolute()
         if install_dir.exists() and not install_dir.is_dir():
-            console.print(f"[red]Error: {dir} exists but is not a directory[/red]")
+            rich.print(f"[red]Error: {dir} exists but is not a directory[/red]")
             return 1
 
         # Check if directory is empty or contains ComfyUI
         if install_dir.exists():
             contents = list(install_dir.iterdir())
             if contents and not (install_dir / ".git").exists():
-                console.print(
+                rich.print(
                     f"[red]Error: Directory {dir} is not empty and doesn't appear to be a ComfyUI installation[/red]"
                 )
                 return 1
     except Exception as e:
-        console.print(f"[red]Error: Invalid directory path - {str(e)}[/red]")
+        rich.print(f"[red]Error: Invalid directory path - {str(e)}[/red]")
         return 1
 
     # Check git installation
@@ -89,7 +86,7 @@ def init(dir: str, verbose: int):
             capture_output=True,
         )
     except (subprocess.SubprocessError, FileNotFoundError):
-        console.print("[red]Error: git is not installed or not in PATH[/red]")
+        rich.print("[red]Error: git is not installed or not in PATH[/red]")
         return 1
 
     # Check if we have write permissions
@@ -100,36 +97,36 @@ def init(dir: str, verbose: int):
         test_file.touch()
         test_file.unlink()
     except (OSError, PermissionError) as e:
-        console.print(f"[red]Error: No write permission in {dir} - {str(e)}[/red]")
+        rich.print(f"[red]Error: No write permission in {dir} - {str(e)}[/red]")
         return 1
 
     # Check if Python version is compatible
     if sys.version_info < (3, 8):
-        console.print("[red]Error: Python 3.8 or higher is required[/red]")
+        rich.print("[red]Error: Python 3.8 or higher is required[/red]")
         return 1
 
     # Check if uv is installed
     try:
         _ensure_uv()
     except RuntimeError as e:
-        console.print(f"[red]Error: {str(e)}[/red]")
+        rich.print(f"[red]Error: {str(e)}[/red]")
         return 1
 
     # Check if enough disk space is available (rough estimate: 2GB)
     try:
         free_space = shutil.disk_usage(install_dir).free
         if free_space < 2 * 1024 * 1024 * 1024:  # 2GB in bytes
-            console.print(
+            rich.print(
                 "[yellow]Warning: Less than 2GB free disk space available[/yellow]"
             )
     except Exception as e:
-        console.print(
+        rich.print(
             f"[yellow]Warning: Could not check free disk space - {str(e)}[/yellow]"
         )
 
     # Clone ComfyUI if not exists
     if not (install_dir / ".git").exists():
-        console.print("[green]Cloning ComfyUI...[/green]")
+        rich.print("[green]Cloning ComfyUI...[/green]")
         subprocess.run(
             [
                 "git",
@@ -141,7 +138,7 @@ def init(dir: str, verbose: int):
         )
 
     # Update ComfyUI
-    console.print("[green]Updating ComfyUI...[/green]")
+    rich.print("[green]Updating ComfyUI...[/green]")
     subprocess.run(
         ["git", "pull"],
         cwd=install_dir,
@@ -150,7 +147,7 @@ def init(dir: str, verbose: int):
 
     # Create and activate venv
     venv_dir = install_dir / ".venv"
-    console.print("[green]Creating virtual environment with uv...[/green]")
+    rich.print("[green]Creating virtual environment with uv...[/green]")
     if venv_dir.exists():
         shutil.rmtree(venv_dir)
     subprocess.run(
@@ -166,7 +163,7 @@ def init(dir: str, verbose: int):
         python = str(venv_dir / "bin" / "python")
 
     # Install requirements with uv
-    console.print("[green]Installing ComfyUI requirements with uv...[/green]")
+    rich.print("[green]Installing ComfyUI requirements with uv...[/green]")
     subprocess.run(
         ["uv", "pip", "install", "pip", "--upgrade"],
         env={
@@ -185,7 +182,7 @@ def init(dir: str, verbose: int):
     )
 
     # Install comfy-pack as custom node
-    console.print("[green]Installing comfy-pack custom nodes...[/green]")
+    rich.print("[green]Installing comfy-pack custom nodes...[/green]")
     custom_nodes_dir = install_dir / "custom_nodes"
     custom_nodes_dir.mkdir(exist_ok=True)
 
@@ -227,12 +224,12 @@ def init(dir: str, verbose: int):
         )
 
     version = get_self_git_commit() or "unknown"
-    console.print(
+    rich.print(
         f"\n[green]✓ Installation completed! (comfy-pack version: {version})[/green]"
     )
-    console.print(f"ComfyUI directory: {install_dir}")
+    rich.print(f"ComfyUI directory: {install_dir}")
 
-    console.print(
+    rich.print(
         "\n[green]Next steps:[/green]\n"
         f"1. cd {dir}\n"
         "2. source .venv/bin/activate  # On Windows: .venv\\Scripts\\activate\n"
@@ -244,7 +241,7 @@ def init(dir: str, verbose: int):
     name="unpack",
     help="Restore the ComfyUI workspace to specified directory",
 )
-@click.argument("cpack", type=click.Path(exists=True, dir_okay=False))
+@click.argument("cpack", type=click.Path(exists=True))
 @click.option(
     "--dir",
     "-d",
@@ -259,23 +256,56 @@ def init(dir: str, verbose: int):
     is_flag=True,
 )
 @click.option(
+    "--no-models",
+    default=False,
+    type=click.BOOL,
+    is_flag=True,
+    help="Do not install models",
+)
+@click.option(
+    "--no-venv",
+    is_flag=True,
+    help="Do not create a virtual environment for ComfyUI",
+    default=False,
+)
+@click.option(
     "--verbose",
     "-v",
     count=True,
     help="Increase verbosity level (use multiple times for more verbosity)",
 )
-def unpack_cmd(cpack: str, dir: str, include_disabled_models: bool, verbose: int):
-    from rich.console import Console
+@click.option(
+    "--preheat",
+    is_flag=True,
+    help="Preheat the workspace after unpacking",
+    default=False,
+)
+def unpack_cmd(
+    cpack: str,
+    dir: str,
+    include_disabled_models: bool,
+    no_models: bool,
+    no_venv: bool,
+    verbose: int,
+    preheat: bool,
+):
+    import rich
 
     from .package import install
 
-    console = Console()
+    install(
+        cpack,
+        dir,
+        verbose=verbose,
+        all_models=include_disabled_models,
+        prepare_models=not no_models,
+        no_venv=no_venv,
+        preheat=preheat,
+    )
+    rich.print("\n[green]✓ ComfyUI Workspace is restored![/green]")
+    rich.print(f"{dir}")
 
-    install(cpack, dir, verbose=verbose, all_models=include_disabled_models)
-    console.print("\n[green]✓ ComfyUI Workspace is restored![/green]")
-    console.print(f"{dir}")
-
-    console.print(
+    rich.print(
         "\n[green] Next steps: [/green]\n"
         "1. Change directory to the restored workspace\n"
         "2. Source the virtual environment by running `source .venv/bin/activate`\n"
@@ -284,7 +314,7 @@ def unpack_cmd(cpack: str, dir: str, include_disabled_models: bool, verbose: int
 
 
 def _print_schema(schema, verbose: int = 0):
-    from rich.console import Console
+    import rich
     from rich.table import Table
 
     table = Table(title="")
@@ -315,7 +345,7 @@ def _print_schema(schema, verbose: int = 0):
             range_str,
         )
 
-    Console().print(table)
+    rich.print(table)
 
 
 @functools.lru_cache
@@ -343,16 +373,14 @@ def _get_cache_workspace(cpack: str):
 )
 @click.pass_context
 def run(ctx, cpack: str, output_dir: str, help: bool, verbose: int):
+    import rich
     from pydantic import ValidationError
-    from rich.console import Console
 
     from .utils import generate_input_model
 
     inputs = dict(
         zip([k.lstrip("-").replace("-", "_") for k in ctx.args[::2]], ctx.args[1::2])
     )
-
-    console = Console()
 
     with zipfile.ZipFile(cpack) as z:
         workflow = json.loads(z.read("workflow_api.json"))
@@ -361,24 +389,24 @@ def run(ctx, cpack: str, output_dir: str, help: bool, verbose: int):
 
     # If help is requested, show command help and input schema
     if help:
-        console.print(
+        rich.print(
             'Usage: comfy-pack run [OPTIONS] CPACK --input1 "value1" --input2 "value2" ...'
         )
-        console.print("Run a ComfyUI package with the given inputs:")
+        rich.print("Run a ComfyUI package with the given inputs:")
         _print_schema(input_model.model_json_schema(), verbose)
         return 0
 
     try:
         validated_data = input_model(**inputs)
-        console.print("[green]✓ Input is valid![/green]")
+        rich.print("[green]✓ Input is valid![/green]")
         for field, value in validated_data.model_dump().items():
-            console.print(f"{field}: {value}")
+            rich.print(f"{field}: {value}")
     except ValidationError as e:
-        console.print("[red]✗ Validation failed![/red]")
+        rich.print("[red]✗ Validation failed![/red]")
         for error in e.errors():
-            console.print(f"- {error['loc'][0]}: {error['msg']}")
+            rich.print(f"- {error['loc'][0]}: {error['msg']}")
 
-        console.print("\n[yellow]Expected inputs:[/yellow]")
+        rich.print("\n[yellow]Expected inputs:[/yellow]")
         _print_schema(input_model.model_json_schema(), verbose)
         return 1
 
@@ -386,19 +414,19 @@ def run(ctx, cpack: str, output_dir: str, help: bool, verbose: int):
 
     workspace = _get_cache_workspace(cpack)
     if not (workspace / "DONE").exists():
-        console.print("\n[green]✓ Restoring ComfyUI Workspace...[/green]")
+        rich.print("\n[green]✓ Restoring ComfyUI Workspace...[/green]")
         if workspace.exists():
             shutil.rmtree(workspace)
         install(cpack, workspace, verbose=verbose)
         with open(workspace / "DONE", "w") as f:
             f.write("DONE")
-    console.print("\n[green]✓ ComfyUI Workspace is restored![/green]")
-    console.print(f"{workspace}")
+    rich.print("\n[green]✓ ComfyUI Workspace is restored![/green]")
+    rich.print(f"{workspace}")
 
     from .run import ComfyUIServer, run_workflow
 
     with ComfyUIServer(str(workspace.absolute()), verbose=verbose) as server:
-        console.print("\n[green]✓ ComfyUI is launched in the background![/green]")
+        rich.print("\n[green]✓ ComfyUI is launched in the background![/green]")
         results = run_workflow(
             server.host,
             server.port,
@@ -408,17 +436,17 @@ def run(ctx, cpack: str, output_dir: str, help: bool, verbose: int):
             workspace=server.workspace,
             **validated_data.model_dump(),
         )
-        console.print("\n[green]✓ Workflow is executed successfully![/green]")
+        rich.print("\n[green]✓ Workflow is executed successfully![/green]")
         if results:
-            console.print("\n[green]✓ Retrieved outputs:[/green]")
+            rich.print("\n[green]✓ Retrieved outputs:[/green]")
         if isinstance(results, dict):
             for field, value in results.items():
-                console.print(f"{field}: {value}")
+                rich.print(f"{field}: {value}")
         elif isinstance(results, list):
             for i, value in enumerate(results):
-                console.print(f"{i}: {value}")
+                rich.print(f"{i}: {value}")
         else:
-            console.print(results)
+            rich.print(results)
 
 
 @main.command(name="build-bento")
@@ -495,7 +523,7 @@ def unpack_bento(bento: str, workspace: Path, verbose: int):
     """Restore the ComfyUI workspace from a given bento."""
     import bentoml
 
-    from .package import install_comfyui, install_custom_modules, install_dependencies
+    from .package import install
 
     try:
         bento_obj = bentoml.get(bento)
@@ -506,42 +534,8 @@ def unpack_bento(bento: str, workspace: Path, verbose: int):
         )
         bentoml.pull(bento)
         bento_obj = bentoml.get(bento)
-    workspace.parent.mkdir(parents=True, exist_ok=True)
-    if not workspace.joinpath(".DONE").exists():
-        for model in bento_obj.info.models:
-            model.to_model().resolve()
-        snapshot = json.loads(Path(bento_obj.path_of("src/snapshot.json")).read_text())
-        install_comfyui(snapshot, workspace, verbose=verbose)
-        workspace.joinpath(".DONE").unlink()  # created by install_comfyui
-        reqs_txt = bento_obj.path_of("env/python/requirements.txt")
-        if sys.platform != "linux":
-            src_reqs_txt = bento_obj.path_of("src/requirements.txt")
-            if os.path.exists(src_reqs_txt):
-                click.echo("Using requirements.txt from src directory")
-                reqs_txt = src_reqs_txt
-        install_dependencies(snapshot, reqs_txt, workspace, verbose=verbose)
 
-        for f in Path(bento_obj.path_of("src/input")).glob("*"):
-            if f.is_file():
-                shutil.copy(f, workspace / "input" / f.name)
-            elif f.is_dir():
-                shutil.copytree(f, workspace / "input" / f.name, dirs_exist_ok=True)
-        install_custom_modules(snapshot, workspace, verbose=verbose)
-        for model in snapshot["models"]:
-            if model.get("disabled", False):
-                continue
-            model_path = workspace / cast(str, model["filename"])
-            if model_path.exists():
-                continue
-            if model_tag := model.get("model_tag"):
-                model_path.parent.mkdir(parents=True, exist_ok=True)
-                bento_model = bentoml.models.get(model_tag)
-                model_file = bento_model.path_of("model.bin")
-                click.echo(f"Copying {model_file} to {model_path}")
-                model_path.symlink_to(model_file)
-            else:
-                click.echo("WARN: Unrecognized model source, the model may be missing")
-        workspace.joinpath(".DONE").write_text(snapshot["comfyui"])
+    install(bento_obj.path_of("src"), workspace, verbose=verbose, prepare_models=False)
 
     if os.name == "nt":
         exe = "Scripts/python.exe"

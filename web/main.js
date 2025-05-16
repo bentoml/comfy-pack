@@ -247,7 +247,7 @@ class FileTreeList {
     try {
       const { workflow, output: workflow_api } = await app.graphToPrompt();
       const files = await this.getInputFiles(workflow, workflow_api);
-      
+
       // 预先将默认选中的文件添加到选中列表
       files.forEach(file => {
         const path = file.path || file;
@@ -255,14 +255,14 @@ class FileTreeList {
           this.state.toggle(path, true);
         }
       });
-      
+
       this.renderTree(this.buildTree(files));
-    
+
     // 更新所有父目录的状态
     this.container.querySelectorAll("[data-action='check-dir']").forEach(checkbox => {
       this.updateFolderState(checkbox);
     });
-    
+
     // 更新总数
     this.updateCount();
     } catch(e) {
@@ -282,12 +282,12 @@ class FileTreeList {
 
   buildTree(files) {
     const root = { name: 'root', children: {}, files: [] };
-    
+
     for (const file of files) {
       const filePath = file.path || file;
       const parts = filePath.split(/[\/\\]/);
       let current = root;
-      
+
       for (let i = 0; i < parts.length; i++) {
         const part = parts[i];
         if (i === parts.length - 1) {
@@ -313,24 +313,24 @@ class FileTreeList {
         }
       }
     }
-    
+
     // 对目录按名称排序
     for (const dir in root.children) {
       root.children[dir].files.sort((a, b) => a.name.localeCompare(b.name));
     }
-    
+
     return root;
   }
 
   renderTree(node, level = 0) {
     const dirs = Object.values(node.children);
     const hasChildren = dirs.length > 0 || node.files.length > 0;
-    
+
     this.container.innerHTML = this.renderNode(node, true);
-    
+
     this.setupEventListeners();
     this.updateCount();
-  
+
   }
 
   renderNode(node, isRoot = false) {
@@ -354,35 +354,35 @@ class FileTreeList {
 
     if (hasChildren) {
       html += `<div class="cpack-tree-children" style="display: ${isRoot ? '' : 'none'}">`;
-      
+
       // 渲染子目录
       for (const dir of dirs) {
         html += this.renderNode(dir);
       }
-      
+
       // 渲染文件
       for (const file of node.files) {
         html += `
           <div class="cpack-tree-item">
             <label style="padding-left: 17px">
-              <input type="checkbox" name="files" value="${file.path}" 
+              <input type="checkbox" name="files" value="${file.path}"
                 ${this.state.isSelected(file.path) || file.checked ? 'checked' : ''} />
               <span>${file.name}</span>
-              ${file.badges ? file.badges.map(badge => 
-                `<span style="background: ${badge.color || '#00a67d33'}; 
-                  color: ${badge.textColor || '#00a67d'}; 
-                  padding: 2px 6px; 
-                  border-radius: 4px; 
-                  font-size: 0.8em; 
+              ${file.badges ? file.badges.map(badge =>
+                `<span style="background: ${badge.color || '#00a67d33'};
+                  color: ${badge.textColor || '#00a67d'};
+                  padding: 2px 6px;
+                  border-radius: 4px;
+                  font-size: 0.8em;
                   cursor: help;
-                  white-space: nowrap;" 
+                  white-space: nowrap;"
                   title="${badge.tooltip || ''}">${badge.text}</span>`
               ).join('') : ''}
             </label>
           </div>
         `;
       }
-      
+
       html += '</div>';
     }
 
@@ -422,7 +422,7 @@ class FileTreeList {
   }
 
   setupEventListeners() {
-    
+
 
     // 目录选择功能
     this.container.querySelectorAll("[data-action='check-dir']").forEach(checkbox => {
@@ -433,7 +433,7 @@ class FileTreeList {
           const childFiles = Array.from(children.querySelectorAll("input[name='files']"))
             .map(input => input.value);
           this.state.toggleMultiple(childFiles, e.target.checked);
-          
+
           // 更新UI
           children.querySelectorAll("input[type='checkbox']").forEach(child => {
             child.checked = e.target.checked;
@@ -442,7 +442,7 @@ class FileTreeList {
           }
           });
         }
-        
+
       });
     });
 
@@ -464,7 +464,7 @@ class FileTreeList {
     this.container.querySelectorAll("input[name='files']").forEach(checkbox => {
       checkbox.addEventListener('change', (e) => {
         this.state.toggle(e.target.value, e.target.checked);
-      
+
       // 更新父文件夹状态
       const parentFolder = checkbox.closest('.cpack-tree-children')
         ?.previousElementSibling
@@ -477,7 +477,7 @@ class FileTreeList {
   }
 
   updateCount() {
-    
+
     const countSpan = document.querySelector(`[data-files-count='${this.countId}']`);
     if (countSpan) {
       countSpan.textContent = this.state.getSelectedCount();
@@ -616,7 +616,7 @@ class ModelList {
     // 只返回用户选中的模型
     return Array.from(this.container.querySelectorAll("input[name='models']:checked"))
       .map(input => input.value);
-  
+
   }
 }
 
@@ -679,7 +679,7 @@ async function createPackModal() {
     const packageOptionsContainer = form.querySelector("#package-options-container");
     const packageOptions = new PackageOptions(form, "pack-models-list", "pack-files-list", true);
     packageOptionsContainer.innerHTML = packageOptions.getHtml();
-    
+
     packageOptions.init().then(() => {
       confirmButton.disabled = false;
     });
@@ -775,7 +775,7 @@ async function unpackAction() {
   content.innerHTML = `
     <div style="margin-bottom: 20px;">
       <p style="margin-bottom: 15px;">To unpack a workflow package, follow these steps:</p>
-      
+
       <div style="margin-bottom: 15px;">
         <p style="margin-bottom: 10px;">1. Install comfy-pack CLI:</p>
         <div class="cpack-copyable" style="margin: 10px 0;">
@@ -804,13 +804,13 @@ async function unpackAction() {
       const closeButton = document.createElement("button");
       closeButton.textContent = "Close";
       closeButton.className = "cpack-btn";
-      
+
       buttonContainer.appendChild(closeButton);
-      
+
       modal.appendChild(title);
       modal.appendChild(content);
       modal.appendChild(buttonContainer);
-      
+
       const { close } = createModal(modal);
       closeButton.onclick = close;
 }
@@ -1001,13 +1001,13 @@ class PackageOptions {
   async init() {
     const modelsList = this.container.querySelector(`#${this.modelsListId}`);
     const filesList = this.container.querySelector(`#${this.filesListId}`);
-    
+
     this.modelListComponent = new ModelList(modelsList, this.modelsListId);
     this.fileListComponent = new FileTreeList(filesList, this.filesListId);
 
     const addButton = this.container.querySelector("#add-button");
     const systemPackagesArray = this.container.querySelector("#system-packages-array");
-    
+
     addButton.addEventListener("click", (e) => {
       e.preventDefault();
       const row = document.createElement("div");
@@ -1063,7 +1063,7 @@ const buildForm = `
       <p style="font-size: 0.85em; color: #888; margin-top: 5px;">
         Get your API Token at <a href="https://cloud.bentoml.com/signup?from=comfy-pack" target="_blank" style="color: #00a67d;">cloud.bentoml.com</a>
       </p>
-  
+
     </div>
 
   </div>
@@ -1112,7 +1112,7 @@ function createBuildModal() {
     const packageOptionsContainer = form.querySelector("#package-options-container");
     const packageOptions = new PackageOptions(form, "build-models-list", "build-files-list", false);
     packageOptionsContainer.innerHTML = packageOptions.getHtml();
-    
+
     packageOptions.init().then(() => {
       confirmButton.disabled = false;
     });
@@ -1234,7 +1234,7 @@ async function createServeStatusModal(url) {
   // Start status checking
   const checkInterval = setInterval(async () => {
     try {
-      const resp = await api.fetchApi("/bentoml/serve/heartbeat", { method: "POST" });
+      const resp = await api.fetchApi("/bentoml/serve/heartbeat");
       const status = await resp.json();
       if (status.error) {
         title.textContent = "Server Error";
