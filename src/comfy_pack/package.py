@@ -201,8 +201,9 @@ def install_dependencies(
         stdout=stdout,
         stderr=stderr,
     )
-    with open(venv / "DONE", "w") as f:
-        f.write("DONE")
+    if not no_venv:
+        with open(venv / "DONE", "w") as f:
+            f.write("DONE")
     return venv_py
 
 
