@@ -86,7 +86,7 @@ def init(dir: str, verbose: int):
             capture_output=True,
         )
     except (subprocess.SubprocessError, FileNotFoundError):
-        console.print("[red]Error: git is not installed or not in PATH[/red]")
+        rich.print("[red]Error: git is not installed or not in PATH[/red]")
         return 1
 
     # Check if we have write permissions
@@ -97,36 +97,36 @@ def init(dir: str, verbose: int):
         test_file.touch()
         test_file.unlink()
     except (OSError, PermissionError) as e:
-        console.print(f"[red]Error: No write permission in {dir} - {str(e)}[/red]")
+        rich.print(f"[red]Error: No write permission in {dir} - {str(e)}[/red]")
         return 1
 
     # Check if Python version is compatible
     if sys.version_info < (3, 8):
-        console.print("[red]Error: Python 3.8 or higher is required[/red]")
+        rich.print("[red]Error: Python 3.8 or higher is required[/red]")
         return 1
 
     # Check if uv is installed
     try:
         _ensure_uv()
     except RuntimeError as e:
-        console.print(f"[red]Error: {str(e)}[/red]")
+        rich.print(f"[red]Error: {str(e)}[/red]")
         return 1
 
     # Check if enough disk space is available (rough estimate: 2GB)
     try:
         free_space = shutil.disk_usage(install_dir).free
         if free_space < 2 * 1024 * 1024 * 1024:  # 2GB in bytes
-            console.print(
+            rich.print(
                 "[yellow]Warning: Less than 2GB free disk space available[/yellow]"
             )
     except Exception as e:
-        console.print(
+        rich.print(
             f"[yellow]Warning: Could not check free disk space - {str(e)}[/yellow]"
         )
 
     # Clone ComfyUI if not exists
     if not (install_dir / ".git").exists():
-        console.print("[green]Cloning ComfyUI...[/green]")
+        rich.print("[green]Cloning ComfyUI...[/green]")
         subprocess.run(
             [
                 "git",
@@ -138,7 +138,7 @@ def init(dir: str, verbose: int):
         )
 
     # Update ComfyUI
-    console.print("[green]Updating ComfyUI...[/green]")
+    rich.print("[green]Updating ComfyUI...[/green]")
     subprocess.run(
         ["git", "pull"],
         cwd=install_dir,
@@ -147,7 +147,7 @@ def init(dir: str, verbose: int):
 
     # Create and activate venv
     venv_dir = install_dir / ".venv"
-    console.print("[green]Creating virtual environment with uv...[/green]")
+    rich.print("[green]Creating virtual environment with uv...[/green]")
     if venv_dir.exists():
         shutil.rmtree(venv_dir)
     subprocess.run(
@@ -163,7 +163,7 @@ def init(dir: str, verbose: int):
         python = str(venv_dir / "bin" / "python")
 
     # Install requirements with uv
-    console.print("[green]Installing ComfyUI requirements with uv...[/green]")
+    rich.print("[green]Installing ComfyUI requirements with uv...[/green]")
     subprocess.run(
         ["uv", "pip", "install", "pip", "--upgrade"],
         env={
@@ -182,7 +182,7 @@ def init(dir: str, verbose: int):
     )
 
     # Install comfy-pack as custom node
-    console.print("[green]Installing comfy-pack custom nodes...[/green]")
+    rich.print("[green]Installing comfy-pack custom nodes...[/green]")
     custom_nodes_dir = install_dir / "custom_nodes"
     custom_nodes_dir.mkdir(exist_ok=True)
 
@@ -224,12 +224,12 @@ def init(dir: str, verbose: int):
         )
 
     version = get_self_git_commit() or "unknown"
-    console.print(
+    rich.print(
         f"\n[green]✓ Installation completed! (comfy-pack version: {version})[/green]"
     )
-    console.print(f"ComfyUI directory: {install_dir}")
+    rich.print(f"ComfyUI directory: {install_dir}")
 
-    console.print(
+    rich.print(
         "\n[green]Next steps:[/green]\n"
         f"1. cd {dir}\n"
         "2. source .venv/bin/activate  # On Windows: .venv\\Scripts\\activate\n"
@@ -274,6 +274,12 @@ def init(dir: str, verbose: int):
     count=True,
     help="Increase verbosity level (use multiple times for more verbosity)",
 )
+@click.option(
+    "--preheat",
+    is_flag=True,
+    help="Preheat the workspace after unpacking",
+    default=False,
+)
 def unpack_cmd(
     cpack: str,
     dir: str,
@@ -281,6 +287,7 @@ def unpack_cmd(
     no_models: bool,
     no_venv: bool,
     verbose: int,
+    preheat: bool,
 ):
     import rich
 
@@ -293,6 +300,7 @@ def unpack_cmd(
         all_models=include_disabled_models,
         prepare_models=not no_models,
         no_venv=no_venv,
+        preheat=preheat,
     )
     rich.print("\n[green]✓ ComfyUI Workspace is restored![/green]")
     rich.print(f"{dir}")
@@ -406,19 +414,19 @@ def run(ctx, cpack: str, output_dir: str, help: bool, verbose: int):
 
     workspace = _get_cache_workspace(cpack)
     if not (workspace / "DONE").exists():
-        console.print("\n[green]✓ Restoring ComfyUI Workspace...[/green]")
+        rich.print("\n[green]✓ Restoring ComfyUI Workspace...[/green]")
         if workspace.exists():
             shutil.rmtree(workspace)
         install(cpack, workspace, verbose=verbose)
         with open(workspace / "DONE", "w") as f:
             f.write("DONE")
-    console.print("\n[green]✓ ComfyUI Workspace is restored![/green]")
-    console.print(f"{workspace}")
+    rich.print("\n[green]✓ ComfyUI Workspace is restored![/green]")
+    rich.print(f"{workspace}")
 
     from .run import ComfyUIServer, run_workflow
 
     with ComfyUIServer(str(workspace.absolute()), verbose=verbose) as server:
-        console.print("\n[green]✓ ComfyUI is launched in the background![/green]")
+        rich.print("\n[green]✓ ComfyUI is launched in the background![/green]")
         results = run_workflow(
             server.host,
             server.port,
@@ -428,17 +436,17 @@ def run(ctx, cpack: str, output_dir: str, help: bool, verbose: int):
             workspace=server.workspace,
             **validated_data.model_dump(),
         )
-        console.print("\n[green]✓ Workflow is executed successfully![/green]")
+        rich.print("\n[green]✓ Workflow is executed successfully![/green]")
         if results:
-            console.print("\n[green]✓ Retrieved outputs:[/green]")
+            rich.print("\n[green]✓ Retrieved outputs:[/green]")
         if isinstance(results, dict):
             for field, value in results.items():
-                console.print(f"{field}: {value}")
+                rich.print(f"{field}: {value}")
         elif isinstance(results, list):
             for i, value in enumerate(results):
-                console.print(f"{i}: {value}")
+                rich.print(f"{i}: {value}")
         else:
-            console.print(results)
+            rich.print(results)
 
 
 @main.command(name="build-bento")
