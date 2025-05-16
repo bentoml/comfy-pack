@@ -263,13 +263,24 @@ def init(dir: str, verbose: int):
     help="Do not install models",
 )
 @click.option(
+    "--no-venv",
+    is_flag=True,
+    help="Do not create a virtual environment for ComfyUI",
+    default=False,
+)
+@click.option(
     "--verbose",
     "-v",
     count=True,
     help="Increase verbosity level (use multiple times for more verbosity)",
 )
 def unpack_cmd(
-    cpack: str, dir: str, include_disabled_models: bool, no_models: bool, verbose: int
+    cpack: str,
+    dir: str,
+    include_disabled_models: bool,
+    no_models: bool,
+    no_venv: bool,
+    verbose: int,
 ):
     import rich
 
@@ -281,6 +292,7 @@ def unpack_cmd(
         verbose=verbose,
         all_models=include_disabled_models,
         prepare_models=not no_models,
+        no_venv=no_venv,
     )
     rich.print("\n[green]✓ ComfyUI Workspace is restored![/green]")
     rich.print(f"{dir}")

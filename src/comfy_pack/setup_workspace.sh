@@ -18,6 +18,6 @@ if [ -n "$VIRTUAL_ENV" ]; then
 fi
 
 set -x
-comfy-pack unpack "$CPACK" -d "$workspace" --no-models -v
+comfy-pack unpack "$CPACK" -d "$workspace" --no-models --no-venv -v
 chown -R bentoml:bentoml "$workspace"
 set +x

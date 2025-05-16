@@ -141,28 +141,34 @@ def install_dependencies(
     workspace: Path,
     verbose: int = 0,
     no_deps: bool = False,
+    no_venv: bool = False,
 ):
     print("Installing Python dependencies")
     stdout = None if verbose > 0 else subprocess.DEVNULL
     stderr = None if verbose > 1 else subprocess.DEVNULL
-
-    venv = workspace / ".venv"
-    if (venv / "DONE").exists():
-        return
-    venv_py = (
-        venv / "Scripts" / "python.exe" if os.name == "nt" else venv / "bin" / "python"
-    )
-    subprocess.check_call(
-        [
-            "uv",
-            "venv",
-            "--python",
-            python_version,
-            venv,
-        ],
-        stdout=stdout,
-        stderr=stderr,
-    )
+    if no_venv:
+        print("Using the current Python environment")
+        venv_py = Path(sys.executable)
+    else:
+        venv = workspace / ".venv"
+        if (venv / "DONE").exists():
+            return
+        venv_py = (
+            venv / "Scripts" / "python.exe"
+            if os.name == "nt"
+            else venv / "bin" / "python"
+        )
+        subprocess.check_call(
+            [
+                "uv",
+                "venv",
+                "--python",
+                python_version,
+                venv,
+            ],
+            stdout=stdout,
+            stderr=stderr,
+        )
     subprocess.check_call(
         [
             "uv",
@@ -403,6 +409,7 @@ def install(
     preheat: bool = True,
     prepare_models: bool = True,
     all_models: bool = False,
+    no_venv: bool = False,
     verbose: int = 0,
 ):
     workspace = Path(workspace)
@@ -427,6 +434,7 @@ def install(
             snapshot["python"],
             str(workspace / "requirements.txt"),
             workspace,
+            no_venv=no_venv,
             verbose=verbose,
         )
         shutil.copy2(
@@ -453,7 +461,7 @@ def install(
             with ComfyUIServer(
                 str(workspace),
                 verbose=verbose,
-                venv=str(workspace / ".venv"),
+                venv=str(workspace / ".venv") if not no_venv else None,
             ) as _:
                 pass
         if prepare_models:
