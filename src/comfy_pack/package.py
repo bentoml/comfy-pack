@@ -137,12 +137,12 @@ def install_custom_modules(snapshot, workspace: Path, verbose: int = 0):
 
 def install_dependencies(
     python_version: str,
-    req_file: str,
+    req_files: list[str],
     workspace: Path,
     verbose: int = 0,
     no_deps: bool = False,
     no_venv: bool = False,
-):
+) -> Path:
     print("Installing Python dependencies")
     stdout = None if verbose > 0 else subprocess.DEVNULL
     stderr = None if verbose > 1 else subprocess.DEVNULL
@@ -151,13 +151,13 @@ def install_dependencies(
         venv_py = Path(sys.executable)
     else:
         venv = workspace / ".venv"
-        if (venv / "DONE").exists():
-            return
         venv_py = (
             venv / "Scripts" / "python.exe"
             if os.name == "nt"
             else venv / "bin" / "python"
         )
+        if (venv / "DONE").exists():
+            return venv_py
         subprocess.check_call(
             [
                 "uv",
@@ -182,16 +182,16 @@ def install_dependencies(
         stderr=stderr,
     )
     if verbose > 0:
-        print(f"Installing dependencies from {req_file}")
+        print(f"Installing dependencies from {req_files}")
     install_cmd = [
         "uv",
         "pip",
         "install",
         "-p",
         str(venv_py),
-        "-r",
-        req_file,
     ]
+    for req_file in req_files:
+        install_cmd.extend(["-r", str(req_file)])
     if not STRICT_MODE:
         install_cmd.extend(["--index-strategy", "unsafe-best-match"])
     if no_deps:
@@ -398,16 +398,10 @@ def retrieve_models(
                 continue
 
 
-def _ensure_startup_script_path(workspace: Path) -> Path:
-    script_path = workspace / "user" / "default" / "ComfyUI-Manager" / "startup-scripts"
-    script_path.mkdir(parents=True, exist_ok=True)
-    return script_path
-
-
 def install(
     cpack: str | Path,
     workspace: str | Path = "workspace",
-    preheat: bool = True,
+    preheat: bool = False,
     prepare_models: bool = True,
     all_models: bool = False,
     no_venv: bool = False,
@@ -431,16 +425,22 @@ def install(
             )
 
         install_comfyui(snapshot, workspace, verbose=verbose)
-        install_dependencies(
+        py = install_dependencies(
             snapshot["python"],
-            str(workspace / "requirements.txt"),
+            [
+                str(workspace / "requirements.txt"),
+                str(
+                    workspace / "custom_nodes" / "ComfyUI-Manager" / "requirements.txt"
+                ),
+            ],
             workspace,
             no_venv=no_venv,
             verbose=verbose,
         )
-        shutil.copy2(
-            (pack_dir / "snapshot.json"),
-            _ensure_startup_script_path(workspace) / "restore-snapshot.json",
+        cm_cli = workspace / "custom_nodes" / "ComfyUI-Manager" / "cm-cli.py"
+        subprocess.check_call(
+            [str(py), str(cm_cli), "restore-snapshot", str(pack_dir / "snapshot.json")],
+            cwd=workspace,
         )
 
         for f in (pack_dir / "input").glob("*"):
