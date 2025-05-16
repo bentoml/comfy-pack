@@ -1,17 +1,18 @@
 import hashlib
 import json
 import os
-import sys
 import shutil
+import sys
 import zipfile
+from io import BytesIO
 
 import folder_paths
 import node_helpers
 import numpy as np
 import torch
+from comfy_extras.nodes_audio import SaveAudio
 from PIL import Image, ImageOps, ImageSequence, PngImagePlugin
 from PIL.PngImagePlugin import PngInfo
-from io import BytesIO
 
 from .monkeypatch import set_bentoml_output
 
@@ -194,9 +195,18 @@ class OutputImageWithStringTxt:
     OUTPUT_NODE = True
 
     CATEGORY = "ComfyPack/output"
-    DESCRIPTION = "Saves the input images (and optional text) to your ComfyUI output directory."
+    DESCRIPTION = (
+        "Saves the input images (and optional text) to your ComfyUI output directory."
+    )
 
-    def save_images(self, images, filename_prefix="cpack_output_", text="", prompt=None, extra_pnginfo=None):
+    def save_images(
+        self,
+        images,
+        filename_prefix="cpack_output_",
+        text="",
+        prompt=None,
+        extra_pnginfo=None,
+    ):
         filename_prefix += self.prefix_append
         full_output_folder, filename, counter, subfolder, filename_prefix = (
             get_save_image_path(
@@ -209,7 +219,7 @@ class OutputImageWithStringTxt:
         zip_path = os.path.join(full_output_folder, zip_filename)
 
         # create ZIP file
-        with zipfile.ZipFile(zip_path, 'w', zipfile.ZIP_DEFLATED) as zipf:
+        with zipfile.ZipFile(zip_path, "w", zipfile.ZIP_DEFLATED) as zipf:
             for batch_number, image in enumerate(images):
                 # temp store img to RAM
                 i = 255.0 * image.cpu().numpy()
@@ -225,7 +235,12 @@ class OutputImageWithStringTxt:
 
                 # write img file to RAM buffer
                 img_buffer = BytesIO()
-                img.save(img_buffer, format="PNG", pnginfo=metadata, compress_level=self.compress_level)
+                img.save(
+                    img_buffer,
+                    format="PNG",
+                    pnginfo=metadata,
+                    compress_level=self.compress_level,
+                )
                 img_buffer.seek(0)
 
                 # write img into ZIP file
@@ -438,6 +453,7 @@ class AnyInput:
 NODE_CLASS_MAPPINGS = {
     "CPackOutputFile": OutputFile,
     "CPackOutputImage": OutputImage,
+    "CPackOutputAudio": SaveAudio,
     "CPackOutputZip": OutputImageWithStringTxt,
     "CPackInputImage": ImageInput,
     "CPackInputString": StringInput,
@@ -453,6 +469,7 @@ NODE_DISPLAY_NAME_MAPPINGS = {
     "CPackInputFile": "File Input",
     "CPackInputAny": "Any Input",
     "CPackOutputImage": "Image Output",
+    "CPackOutputAudio": "Audio Output",
     "CPackOutputFile": "File Output",
     "CPackOutputZip": "Zip Output(img + txt file)",
 }
