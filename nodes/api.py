@@ -67,11 +67,8 @@ async def _save_snapshot() -> dict[str, Any]:
         return json.load(f)
 
 
-async def _write_snapshot(path: ZPath, data: dict, models: list | None = None) -> None:
+async def _write_snapshot(path: ZPath, data: dict, models: list) -> None:
     snapshot = await _save_snapshot()
-    if models is None:
-        print("Package => Writing models")
-        models = await _get_models()
     for package in list(snapshot["pips"]):
         if any(
             fnmatch(normalize_name(package.split("==")[0]), pat)
@@ -162,7 +159,6 @@ async def _get_models(
             model_data["sha256"],
             cache_only=not ensure_source,
         )
-        model_data["source"] = {}
         # should_store = store_models and (
         #     model_data["source"].get("source") != "huggingface"
         #     or model_data["source"].get("repo", "").startswith("datasets/")
@@ -437,11 +433,13 @@ async def _prepare_pack(
     working_dir: ZPath,
     data: dict,
     store_models: bool = False,
+    ensure_source: bool = True,
 ) -> None:
     model_filter = set(data.get("models", []))
     models = await _get_models(
         store_models=store_models,
         model_filter=model_filter,
+        ensure_source=ensure_source,
     )
 
     await _write_snapshot(working_dir, data, models)
@@ -509,7 +507,7 @@ async def build_bento_api(request):
 
     with tempfile.TemporaryDirectory(suffix="-bento", prefix="comfy-pack-") as temp_dir:
         temp_dir_path = Path(temp_dir)
-        await _prepare_pack(temp_dir_path, data, store_models=True)
+        await _prepare_pack(temp_dir_path, data, store_models=True, ensure_source=False)
 
         # create a bento
         try:
