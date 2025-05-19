@@ -454,6 +454,16 @@ class OutputAudio(SaveAudio):
     CPACK_NODE = True
     CATEGORY = "ComfyPack/output"
 
+    @classmethod
+    def INPUT_TYPES(s):
+        return {
+            "required": {
+                "audio": ("AUDIO",),
+                "filename_prefix": ("STRING", {"default": "cpack_output_"}),
+            },
+            "hidden": {"prompt": "PROMPT", "extra_pnginfo": "EXTRA_PNGINFO"},
+        }
+
 
 NODE_CLASS_MAPPINGS = {
     "CPackOutputFile": OutputFile,
