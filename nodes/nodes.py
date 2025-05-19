@@ -450,10 +450,15 @@ class AnyInput:
         return True
 
 
+class OutputAudio(SaveAudio):
+    CPACK_NODE = True
+    CATEGORY = "ComfyPack/output"
+
+
 NODE_CLASS_MAPPINGS = {
     "CPackOutputFile": OutputFile,
     "CPackOutputImage": OutputImage,
-    "CPackOutputAudio": SaveAudio,
+    "CPackOutputAudio": OutputAudio,
     "CPackOutputZip": OutputImageWithStringTxt,
     "CPackInputImage": ImageInput,
     "CPackInputString": StringInput,
