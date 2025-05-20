@@ -1,7 +1,8 @@
-from .const import MODEL_SOURCE_CACHE_FILE
 import asyncio
 import json
 import re
+
+from .const import MODEL_SOURCE_CACHE_FILE
 
 # MODEL_NAME = r"[a-zA-Z0-9-._]+"
 # COMMIT = r"[a-f0-9]+"
@@ -14,9 +15,8 @@ PATH_PATTERN = re.compile(
 
 
 async def _lookup_huggingface_model(model_sha: str) -> dict:
-    from duckduckgo_search import DDGS
     import aiohttp
-
+    from duckduckgo_search import DDGS
     query = f"site:huggingface.co blob {model_sha}"
 
     try:
@@ -25,7 +25,7 @@ async def _lookup_huggingface_model(model_sha: str) -> dict:
 
             async with aiohttp.ClientSession(trust_env=True) as session:
                 for result in search_results:
-                    url = result['link']
+                    url = result['href']
                     if "blob" not in url:
                         continue
 
@@ -38,11 +38,9 @@ async def _lookup_huggingface_model(model_sha: str) -> dict:
                                 repo, commit = commit_match.groups()
                                 if path_match := PATH_PATTERN.search(text):
                                     path = path_match.group(1)
-                                    download_url = f"https://huggingface.co/{repo}/resolve/{commit}/{path}?download=true"
-                                    url = f"https://huggingface.co/{repo}/blob/{commit}/{path}"
                                     info = {
-                                        "download_url": download_url,
-                                        "url": url,
+                                        "download_url": path,
+                                        "url": path,
                                         "repo": repo,
                                         "commit": commit,
                                         "path": path,
