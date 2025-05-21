@@ -73,6 +73,13 @@ To unpack:
 comfy-pack unpack workflow.cpack.zip
 ```
 
+Huggingface gated models can be accessed by setting your `HF_TOKEN` as an environment variable before unpacking:
+
+```bash
+export HF_TOKEN=hf_XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXx
+comfy-pack unpack workflow.cpack.zip
+```
+
 For example cpack files, check our [examples folder](examples/).
 
 ### Deploy a workflow as an API
