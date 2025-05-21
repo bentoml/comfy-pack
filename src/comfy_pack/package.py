@@ -199,13 +199,25 @@ def get_search_url(sha: str) -> str:
 
 def download_file(url: str, dest_path: Path, progress_callback=None):
     """Download file with progress tracking"""
-    if subprocess.call(["curl", "--version"], stdout=subprocess.DEVNULL) == 0:
-        subprocess.check_call(
-            ["curl", "-L", url, "-o", str(dest_path)],
+
+    # prepare auth token from huggingface if possible
+    if (token := os.getenv("HF_TOKEN")) and ("huggingface" in url):
+        bearer = f"Bearer {token}"
+        urllib_request = urllib.request.Request(
+            url, headers={"Authorization": bearer}
         )
-        return True
+        curl_auth = ["-H", f"Authorization: {bearer}"]
+    else:
+        curl_auth = []
+        urllib_request = url
+
     try:
-        with urllib.request.urlopen(url) as response:
+        if shutil.which("curl"):
+            subprocess.check_call(
+                ["curl", "-L", url, *curl_auth, "--fail", "-o", str(dest_path)],
+            )
+            return True
+        with urllib.request.urlopen(urllib_request) as response:
             total_size = int(response.headers.get("content-length", 0))
             block_size = 8192
             downloaded = 0
