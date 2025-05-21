@@ -81,7 +81,7 @@ class ComfyUIServer:
                 self.port = 8188
         else:
             self.port = port
-        self.venv = venv
+        self.venv = os.path.abspath(venv) if venv else None
 
     def start(self) -> None:
         """
