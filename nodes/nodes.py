@@ -11,6 +11,7 @@ import node_helpers
 import numpy as np
 import torch
 from comfy_extras.nodes_audio import SaveAudio
+from comfy_extras.nodes_video import SaveVideo
 from PIL import Image, ImageOps, ImageSequence, PngImagePlugin
 from PIL.PngImagePlugin import PngInfo
 
@@ -465,10 +466,16 @@ class OutputAudio(SaveAudio):
         }
 
 
+class OutputVideo(SaveVideo):
+    CPACK_NODE = True
+    CATEGORY = "ComfyPack/output"
+
+
 NODE_CLASS_MAPPINGS = {
     "CPackOutputFile": OutputFile,
     "CPackOutputImage": OutputImage,
     "CPackOutputAudio": OutputAudio,
+    "CPackOutputVideo": OutputVideo,
     "CPackOutputZip": OutputImageWithStringTxt,
     "CPackInputImage": ImageInput,
     "CPackInputString": StringInput,
@@ -485,6 +492,7 @@ NODE_DISPLAY_NAME_MAPPINGS = {
     "CPackInputAny": "Any Input",
     "CPackOutputImage": "Image Output",
     "CPackOutputAudio": "Audio Output",
+    "CPackOutputVideo": "Video Output",
     "CPackOutputFile": "File Output",
     "CPackOutputZip": "Zip Output(img + txt file)",
 }

@@ -1,19 +1,14 @@
 from __future__ import annotations
 
-import subprocess
-from pathlib import Path
 import re
+import subprocess
 import sys
+from pathlib import Path
 from typing import TYPE_CHECKING, Any, Literal, Union
 
 if TYPE_CHECKING:
     from pydantic import BaseModel
 
-CPACK_OUTPUT_NODES = {
-    "CPackOutputFile",
-    "CPackOutputImage",
-    "CPackOutputZip"
-}
 
 CPACK_PATH_INPUT_NODES = {
     "CPackInputFile",
@@ -211,7 +206,7 @@ def populate_workflow(
 
     for _, node in output_spec.items():
         node_id = node["id"]
-        if node["class_type"] in CPACK_OUTPUT_NODES:
+        if node["class_type"].startswith("CPackOutput"):
             workflow[node_id]["inputs"]["filename_prefix"] = (
                 output_path / f"{session_id}{node_id}_"
             ).as_posix()
@@ -222,7 +217,7 @@ def retrieve_workflow_outputs(
     workflow: dict,
     output_path: Path,
     session_id: str = "",
-) -> Union[Path, list[Path], dict[str, Path], dict[str, list[Path]]]:
+) -> Union[Path, list[Path], dict[str, Path | list[Path]]]:
     """
     Gets the output file(s) from the workflow.
 
@@ -231,7 +226,7 @@ def retrieve_workflow_outputs(
         output_path (Path): The path where output files are saved.
 
     Returns:
-        Union[Path, list[Path], dict[str, Path], dict[str, list[Path]]]:
+        Union[Path, list[Path], dict[str, Path | list[Path]]]:
             - A single Path if there's only one output file.
             - A list of Paths if there are multiple files for a single output.
             - A dictionary mapping output names to Paths or lists of Paths for multiple outputs.
@@ -244,7 +239,7 @@ def retrieve_workflow_outputs(
         value_map = {}
         for k, node in outputs.items():
             node_id = node["id"]
-            path_strs = list(output_path.glob(f"{node_id}_*"))
+            path_strs = list(output_path.glob(f"{session_id}{node_id}_*"))
             if len(path_strs) == 1:
                 value_map[k] = path_strs[0]
             else:
@@ -252,8 +247,8 @@ def retrieve_workflow_outputs(
         return value_map
 
     name, node = next(iter(outputs.items()))
-    if node["class_type"] not in CPACK_OUTPUT_NODES:
-        raise ValueError(f"Output node {name} is not of type {CPACK_OUTPUT_NODES}")
+    if not node["class_type"].startswith("CPackOutput"):
+        raise ValueError(f"Node {name} is not a comfy-pack output node")
     node_id = node["id"]
 
     outs = list(output_path.glob(f"{session_id}{node_id}_*"))
