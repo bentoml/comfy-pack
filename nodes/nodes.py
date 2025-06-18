@@ -451,6 +451,20 @@ class AnyInput:
         return True
 
 
+class OutputZip:
+    CATEGORY = "ComfyPack/output"
+
+    @classmethod
+    def INPUT_TYPES(cls):
+        return {}
+
+    RETURN_TYPES = ()
+    FUNCTION = "null_op"
+
+    def null_op(self):
+        return ()
+
+
 class OutputAudio(SaveAudio):
     CPACK_NODE = True
     CATEGORY = "ComfyPack/output"
@@ -477,6 +491,7 @@ NODE_CLASS_MAPPINGS = {
     "CPackOutputAudio": OutputAudio,
     "CPackOutputVideo": OutputVideo,
     "CPackOutputZip": OutputImageWithStringTxt,
+    "CPackOutputZipSwitch": OutputZip,
     "CPackInputImage": ImageInput,
     "CPackInputString": StringInput,
     "CPackInputInt": IntInput,
@@ -495,4 +510,5 @@ NODE_DISPLAY_NAME_MAPPINGS = {
     "CPackOutputVideo": "Video Output",
     "CPackOutputFile": "File Output",
     "CPackOutputZip": "Zip Output(img + txt file)",
+    "CPackOutputZipSwitch": "Enable Zip Output",
 }

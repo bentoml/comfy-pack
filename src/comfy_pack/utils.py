@@ -3,6 +3,7 @@ from __future__ import annotations
 import re
 import subprocess
 import sys
+import zipfile
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Literal, Union
 
@@ -235,26 +236,48 @@ def retrieve_workflow_outputs(
         ValueError: If the output node is not of the expected type.
     """
     _, outputs = _parse_workflow(workflow)
+    should_zip = any(
+        node["class_type"] == "CPackOutputZipSwitch" for node in workflow.values()
+    )
+    print("Should create zip:", should_zip, outputs, workflow)
+    zip_paths: list[tuple[Path, str]] = []
     if len(outputs) != 1:
         value_map = {}
         for k, node in outputs.items():
             node_id = node["id"]
             path_strs = list(output_path.glob(f"{session_id}{node_id}_*"))
+            zip_paths.extend(
+                (p, p.name.replace(f"{session_id}{node_id}", k)) for p in path_strs
+            )
             if len(path_strs) == 1:
                 value_map[k] = path_strs[0]
             else:
                 value_map[k] = path_strs
-        return value_map
+        if not should_zip:
+            return value_map
+    else:
+        name, node = next(iter(outputs.items()))
+        if not node["class_type"].startswith("CPackOutput"):
+            raise ValueError(f"Node {name} is not a comfy-pack output node")
+        node_id = node["id"]
 
-    name, node = next(iter(outputs.items()))
-    if not node["class_type"].startswith("CPackOutput"):
-        raise ValueError(f"Node {name} is not a comfy-pack output node")
-    node_id = node["id"]
-
-    outs = list(output_path.glob(f"{session_id}{node_id}_*"))
-    if len(outs) == 1:
-        return outs[0]
-    return outs
+        outs = list(output_path.glob(f"{session_id}{node_id}_*"))
+        zip_paths.extend(
+            (p, p.name.replace(f"{session_id}{node_id}", name)) for p in outs
+        )
+        if not should_zip:
+            if len(outs) == 1:
+                return outs[0]
+            return outs
+    if len(zip_paths) == 1:
+        return zip_paths[0][0]
+    # Make a zipball from the collected files
+    output_zip = output_path / f"{session_id}_output.zip"
+    print(f"Creating zip file: {output_zip}")
+    with zipfile.ZipFile(output_zip, "w", zipfile.ZIP_DEFLATED) as zipf:
+        for path, name in zip_paths:
+            zipf.write(path, arcname=name)
+    return output_zip
 
 
 def get_self_git_commit() -> str | None:
