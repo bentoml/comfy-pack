@@ -1,3 +1,4 @@
+import glob
 import hashlib
 import json
 import os
@@ -485,6 +486,52 @@ class OutputVideo(SaveVideo):
     CATEGORY = "ComfyPack/output"
 
 
+class OutputTextFile:
+    @classmethod
+    def INPUT_TYPES(cls):
+        return {
+            "required": {
+                "text": ("STRING", {"forceInput": True}),
+                "filename_prefix": ("STRING", {"default": "cpack_output_"}),
+            },
+            "optional": {
+                "file_extension": ("STRING", {"default": ".txt"}),
+            },
+        }
+
+    OUTPUT_NODE = True
+    RETURN_TYPES = ()
+    FUNCTION = "save_text_file"
+    CATEGORY = "ComfyPack/output"
+    CPACK_NODE = True
+
+    def save_text_file(
+        self, text: str, filename_prefix: str, file_extension: str = ".txt"
+    ):
+        subfolder, filename_prefix = os.path.split(os.path.normpath(filename_prefix))
+        output_dir = folder_paths.get_output_directory()
+        full_output_folder = os.path.join(output_dir, subfolder)
+
+        full_output_filename = self.get_output_filename(
+            full_output_folder, filename_prefix, file_extension
+        )
+        with open(full_output_filename, "w", encoding="utf-8", newline="\n") as f:
+            f.write(text)
+        return (text, {"ui": {"string": text}})
+
+    @staticmethod
+    def get_output_filename(folder: str, prefix: str, extension: str) -> str:
+        matched_files = [
+            os.path.basename(f)[len(prefix) + 1 : -len(extension)]
+            for f in glob.glob(os.path.join(folder, f"{prefix}_*{extension}"))
+        ]
+        print("MATCHING", matched_files)
+        max_count = max(
+            (int(name) for name in matched_files if name.isdigit()), default=0
+        )
+        return os.path.join(folder, f"{prefix}_{max_count + 1:04d}{extension}")
+
+
 NODE_CLASS_MAPPINGS = {
     "CPackOutputFile": OutputFile,
     "CPackOutputImage": OutputImage,
@@ -497,6 +544,7 @@ NODE_CLASS_MAPPINGS = {
     "CPackInputInt": IntInput,
     "CPackInputFile": FileInput,
     "CPackInputAny": AnyInput,
+    "CPackOutputTextFile": OutputTextFile,
 }
 
 NODE_DISPLAY_NAME_MAPPINGS = {
@@ -511,4 +559,5 @@ NODE_DISPLAY_NAME_MAPPINGS = {
     "CPackOutputFile": "File Output",
     "CPackOutputZip": "Zip Output(img + txt file)",
     "CPackOutputZipSwitch": "Enable Zip Output",
+    "CPackOutputTextFile": "Output Text to File",
 }
