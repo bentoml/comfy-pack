@@ -15,13 +15,13 @@ from fnmatch import fnmatch
 from pathlib import Path
 from typing import Any, Union
 
-import folder_paths
 from aiohttp import web
-from server import PromptServer
-
 from comfy_pack.hash import async_batch_get_sha256
 from comfy_pack.model_helper import alookup_model_source
 from comfy_pack.package import build_bento
+
+import folder_paths
+from server import PromptServer
 
 ZPath = Union[Path, zipfile.Path]
 TEMP_FOLDER = Path(__file__).parent.parent / "temp"
@@ -136,12 +136,23 @@ async def _get_models(
         for line in stdout.decode().splitlines()
         if not os.path.basename(line).startswith(".")
     ]
+
+    # Only compute hashes for referenced models
+    to_include=[]
+    if model_filter:
+        for m1 in model_filter:
+            for m2 in model_filenames:
+                if m1 in m2:
+                    to_include.append(m2)
+    else:
+        to_include=model_filenames
+
     model_hashes = await async_batch_get_sha256(
-        model_filenames,
+        to_include,
         cache_only=not (ensure_sha or store_models),
     )
 
-    for filename in model_filenames:
+    for filename in to_include:
         relpath = os.path.relpath(filename, folder_paths.base_path)
 
         model_data = {

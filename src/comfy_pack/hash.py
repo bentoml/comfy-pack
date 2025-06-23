@@ -113,7 +113,12 @@ async def async_batch_get_sha256(
     try:
         with SHA_CACHE_FILE.open("r") as f:
             cache = json.load(f)
-        cache.update(new_cache)
+    except (IOError, OSError):
+        cache = {}
+
+    cache.update(new_cache)
+
+    try:
         with SHA_CACHE_FILE.open("w") as f:
             json.dump(cache, f, indent=2)
     except (IOError, OSError):
