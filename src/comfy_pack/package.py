@@ -222,9 +222,7 @@ def download_file(url: str, dest_path: Path, progress_callback=None):
     # prepare auth token from huggingface if possible
     if (token := os.getenv("HF_TOKEN")) and ("huggingface" in url):
         bearer = f"Bearer {token}"
-        urllib_request = urllib.request.Request(
-            url, headers={"Authorization": bearer}
-        )
+        urllib_request = urllib.request.Request(url, headers={"Authorization": bearer})
         curl_auth = ["-H", f"Authorization: {bearer}"]
     else:
         curl_auth = []
@@ -451,7 +449,14 @@ def install(
         )
         cm_cli = workspace / "custom_nodes" / "ComfyUI-Manager" / "cm-cli.py"
         subprocess.check_call(
-            [str(py), str(cm_cli), "restore-snapshot", str(pack_dir / "snapshot.json")],
+            [
+                str(py),
+                str(cm_cli),
+                "restore-snapshot",
+                "--pip-non-url",
+                "--pip-non-local-url",
+                str(pack_dir / "snapshot.json"),
+            ],
             cwd=workspace,
         )
 
