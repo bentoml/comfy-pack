@@ -302,15 +302,18 @@ def unpack_cmd(
         no_venv=no_venv,
         preheat=preheat,
     )
-    rich.print("\n[green]✓ ComfyUI Workspace is restored![/green]")
-    rich.print(f"{dir}")
+    rich.print("\n[green]✓ ComfyUI Workspace is restored at:[/green]")
+    rich.print(os.path.abspath(dir))
+    steps = [f"Change directory to the restored workspace: `cd {dir}`"]
+    if not no_venv:
+        steps.append(
+            "Source the virtual environment by running `source .venv/bin/activate`"
+        )
+    steps.append("Run the ComfyUI project by running `python main.py`")
 
-    rich.print(
-        "\n[green] Next steps: [/green]\n"
-        "1. Change directory to the restored workspace\n"
-        "2. Source the virtual environment by running `source .venv/bin/activate`\n"
-        "3. Run the ComfyUI project by running `python main.py`"
-    )
+    rich.print(f"\n[green]⏭️ Next steps: [/green]\n1. {steps[0]}\n2. {steps[1]}")
+    if len(steps) > 2:
+        rich.print(f"3. {steps[2]}")
 
 
 def _print_schema(schema, verbose: int = 0):

@@ -447,7 +447,7 @@ def install(
             no_venv=no_venv,
             verbose=verbose,
         )
-        cm_cli = workspace / "custom_nodes" / "ComfyUI-Manager" / "cm-cli.py"
+        cm_cli = Path("custom_nodes", "ComfyUI-Manager", "cm-cli.py")
         subprocess.check_call(
             [
                 str(py),
