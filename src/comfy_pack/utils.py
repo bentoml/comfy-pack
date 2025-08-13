@@ -239,7 +239,6 @@ def retrieve_workflow_outputs(
     should_zip = any(
         node["class_type"] == "CPackOutputZipSwitch" for node in workflow.values()
     )
-    print("Should create zip:", should_zip, outputs, workflow)
     zip_paths: list[tuple[Path, str]] = []
     if len(outputs) != 1:
         value_map = {}
