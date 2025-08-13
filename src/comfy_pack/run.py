@@ -5,6 +5,7 @@ import json
 import logging
 import os
 import random
+import shlex
 import shutil
 import socket
 import subprocess
@@ -115,8 +116,6 @@ class ComfyUIServer:
         subprocess.run(command, check=True, stdout=stdout, env=env)
         logger.info("Successfully disabled Comfy CLI tracking")
 
-        logger.info("Preparing directories required by ComfyUI...")
-
         logger.info("Starting ComfyUI in the background...")
         command = [
             "python",
@@ -133,6 +132,8 @@ class ComfyUIServer:
 
         if self.host != "localhost":
             command.extend(["--listen", self.host])
+        if options := env.pop("COMFYUI_OPTIONS", None):
+            command.extend(shlex.split(options))
 
         def preexec_fn():
             os.setpgrp()
