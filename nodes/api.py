@@ -237,29 +237,29 @@ async def pack_workspace(request):
 
 
 class DevServer:
-    TIMEOUT = 3600 * 24
-    proc: Union[None, subprocess.Popen] = None
-    watch_dog_task: asyncio.Task | None = None
-    last_feed = 0
-    run_dir: Path | None = None
-    port = 0
+    def __init__(self):
+        self.TIMEOUT = 3600 * 24
+        self.proc: Union[None, subprocess.Popen] = None
+        self.watch_dog_task: asyncio.Task | None = None
+        self.last_feed = 0
+        self.run_dir: Path | None = None
+        self.port = 0
 
-    @classmethod
-    def start(cls, workflow_api: dict, port: int = 3000):
+    def start(self, workflow_api: dict, port: int = 3000):
         from comfy_pack import __file__ as comfy_pack_file
 
-        cls.stop()
+        self.stop()
 
-        cls.port = port
+        self.port = port
         # prepare a temporary directory
-        cls.run_dir = Path(tempfile.mkdtemp(suffix="-bento", prefix="comfy-pack-"))
-        with cls.run_dir.joinpath("workflow_api.json").open("w") as f:
+        self.run_dir = Path(tempfile.mkdtemp(suffix="-bento", prefix="comfy-pack-"))
+        with self.run_dir.joinpath("workflow_api.json").open("w") as f:
             f.write(json.dumps(workflow_api, indent=2))
         shutil.copy(
             Path(comfy_pack_file).with_name("service.py"),
-            cls.run_dir / "service.py",
+            self.run_dir / "service.py",
         )
-        shutil.copytree(COMFY_PACK_DIR, cls.run_dir / COMFY_PACK_DIR.name)
+        shutil.copytree(COMFY_PACK_DIR, self.run_dir / COMFY_PACK_DIR.name)
 
         # find a free port
         self_port = 8188
@@ -269,7 +269,7 @@ class DevServer:
                 break
 
         print(f"Starting dev server at port {port}, comfyui at port {self_port}")
-        cls.proc = subprocess.Popen(
+        self.proc = subprocess.Popen(
             [
                 sys.executable,
                 "-m",
@@ -279,49 +279,46 @@ class DevServer:
                 "--port",
                 str(port),
             ],
-            cwd=str(cls.run_dir.absolute()),
+            cwd=str(self.run_dir.absolute()),
             env={
                 **os.environ,
                 "COMFYUI_SERVER": f"localhost:{self_port}",
             },
         )
-        cls.watch_dog_task = asyncio.create_task(cls.watch_dog())
-        cls.last_feed = time.time()
+        self.watch_dog_task = asyncio.create_task(self.watch_dog())
+        self.last_feed = time.time()
 
-    @classmethod
-    async def watch_dog(cls):
+    async def watch_dog(self):
         while True:
             await asyncio.sleep(0.1)
-            if cls.last_feed + cls.TIMEOUT < time.time():
-                cls.stop()
+            if self.last_feed + self.TIMEOUT < time.time():
+                self.stop()
                 break
 
-    @classmethod
-    def feed_watch_dog(cls):
-        if cls.proc:
-            if cls.proc.poll() is None:
-                cls.last_feed = time.time()
+    def feed_watch_dog(self):
+        if self.proc:
+            if self.proc.poll() is None:
+                self.last_feed = time.time()
                 return True
             else:
-                cls.stop()
+                self.stop()
                 return False
         return False
 
-    @classmethod
-    def stop(cls):
-        if cls.proc:
-            cls.proc.terminate()
-            cls.proc.wait()
-            cls.proc = None
+    def stop(self):
+        if self.proc:
+            self.proc.terminate()
+            self.proc.wait()
+            self.proc = None
             time.sleep(1)
             print("Dev server stopped")
-        if cls.watch_dog_task:
-            cls.watch_dog_task.cancel()
-            cls.watch_dog_task = None
-            cls.last_feed = 0
-        if cls.run_dir:
-            shutil.rmtree(cls.run_dir)
-            cls.run_dir = None
+        if self.watch_dog_task:
+            self.watch_dog_task.cancel()
+            self.watch_dog_task = None
+            self.last_feed = 0
+            if self.run_dir:
+                shutil.rmtree(self.run_dir)
+                self.run_dir = None
 
 
 def _parse_workflow(workflow: dict) -> tuple[dict[str, Any], dict[str, Any]]:
@@ -373,15 +370,22 @@ def _validate_workflow(data: dict):
             },
         )
 
-
+primaryDevServer = DevServer()
+devServers = {}
 @PromptServer.instance.routes.post("/bentoml/serve")
 async def serve(request):
     data = await request.json()
 
     if (error := _validate_workflow(data)) is not None:
         return error
-
-    DevServer.stop()
+    devServer = None
+    serverId = data.get("id")
+    if serverId is None:
+      devServer = primaryDevServer
+      primaryDevServer.stop()
+    else:
+      devServer = DevServer()
+      devServers[serverId] = devServer
 
     if _is_port_in_use(data.get("port", 3000), host=data.get("host", "localhost")):
         return web.json_response(
@@ -391,7 +395,7 @@ async def serve(request):
             },
         )
     try:
-        DevServer.start(workflow_api=data["workflow_api"], port=data.get("port", 3000))
+        devServer.start(workflow_api=data["workflow_api"], port=data.get("port", 3000))
         return web.json_response(
             {
                 "result": "success",
@@ -409,7 +413,7 @@ async def serve(request):
 
 @PromptServer.instance.routes.get("/bentoml/serve/heartbeat")
 async def heartbeat(_):
-    running = DevServer.feed_watch_dog()
+    running = primaryDevServer.feed_watch_dog()
 
     if running:
         return web.json_response({"ready": True})
@@ -419,7 +423,11 @@ async def heartbeat(_):
 
 @PromptServer.instance.routes.post("/bentoml/serve/terminate")
 async def terminate(_):
-    DevServer.stop()
+    global devServers
+    primaryDevServer.stop()
+    for devServerId in devServers:
+        devServers[devServerId].stop()
+    devServers = {}
     return web.json_response({"result": "success"})
 
 
