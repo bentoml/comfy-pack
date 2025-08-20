@@ -371,7 +371,7 @@ def _validate_workflow(data: dict):
         )
 
 primaryDevServer = DevServer()
-devServers = {}
+devServers = []
 @PromptServer.instance.routes.post("/bentoml/serve")
 async def serve(request):
     data = await request.json()
@@ -379,13 +379,13 @@ async def serve(request):
     if (error := _validate_workflow(data)) is not None:
         return error
     devServer = None
-    serverId = data.get("id")
-    if serverId is None:
+    parallel = data.get("parallel")
+    if parallel is None:
       devServer = primaryDevServer
       primaryDevServer.stop()
     else:
       devServer = DevServer()
-      devServers[serverId] = devServer
+      devServers.append(devServer)
 
     if _is_port_in_use(data.get("port", 3000), host=data.get("host", "localhost")):
         return web.json_response(
@@ -425,9 +425,9 @@ async def heartbeat(_):
 async def terminate(_):
     global devServers
     primaryDevServer.stop()
-    for devServerId in devServers:
-        devServers[devServerId].stop()
-    devServers = {}
+    for devServer in devServers:
+        devServer.stop()
+    devServers = []
     return web.json_response({"result": "success"})
 
 
