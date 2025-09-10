@@ -132,9 +132,9 @@ async def _get_models(
 
     models = []
     model_filenames = [
-        os.path.abspath(line)
+        os.path.abspath(line.strip().strip('"').replace('\\\\', '/'))
         for line in stdout.decode().splitlines()
-        if not os.path.basename(line).startswith(".")
+        if not os.path.basename(line.strip().strip('"').replace('\\\\', '/')).startswith(".")
     ]
     model_hashes = await async_batch_get_sha256(
         model_filenames,
@@ -142,6 +142,10 @@ async def _get_models(
     )
 
     for filename in model_filenames:
+        # Skip if file doesn't exist
+        if not os.path.exists(filename):
+            continue
+            
         relpath = os.path.relpath(filename, folder_paths.base_path)
 
         model_data = {
