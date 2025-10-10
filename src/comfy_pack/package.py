@@ -150,7 +150,7 @@ def install_dependencies(
         print("Using the current Python environment")
         venv_py = Path(sys.executable)
     else:
-        venv = workspace / ".venv"
+        venv = (workspace / ".venv").absolute()
         venv_py = (
             venv / "Scripts" / "python.exe"
             if os.name == "nt"
