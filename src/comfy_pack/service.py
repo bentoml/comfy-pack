@@ -115,11 +115,6 @@ class ComfyService:
         **kwargs: Any,
     ) -> Path:
         verbose = int("BENTOML_DEBUG" in os.environ)
-        workspace_path = (
-            self.server.workspace
-            if hasattr(self, "server")
-            else os.environ.get("COMFYUI_PATH", ".")
-        )
         ret = comfy_pack.run_workflow(
             self.host,
             self.port,
@@ -127,7 +122,7 @@ class ComfyService:
             output_dir=ctx.temp_dir,
             timeout=REQUEST_TIMEOUT,
             verbose=verbose,
-            workspace=workspace_path,
+            workspace=self.server.workspace if hasattr(self, "server") else ".",
             **kwargs,
         )
         if isinstance(ret, list):
