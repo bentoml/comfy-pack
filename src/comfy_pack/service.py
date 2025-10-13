@@ -80,8 +80,9 @@ class ComfyService:
         logger = logging.getLogger("comfy_pack")
         logger.setLevel(logging.INFO)
         if not EXISTING_COMFYUI_SERVER:
+            workspace_override = os.environ.get("COMFYUI_PATH", None)
             self.server = comfy_pack.run.ComfyUIServer(
-                str(_get_workspace()),
+                workspace_override if workspace_override else str(_get_workspace()),
                 str(INPUT_DIR),
                 verbose=int("BENTOML_DEBUG" in os.environ),
             )
