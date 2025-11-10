@@ -1,19 +1,15 @@
 from __future__ import annotations
 
-import subprocess
-from pathlib import Path
 import re
+import subprocess
 import sys
+import zipfile
+from pathlib import Path
 from typing import TYPE_CHECKING, Any, Literal, Union
 
 if TYPE_CHECKING:
     from pydantic import BaseModel
 
-CPACK_OUTPUT_NODES = {
-    "CPackOutputFile",
-    "CPackOutputImage",
-    "CPackOutputZip"
-}
 
 CPACK_PATH_INPUT_NODES = {
     "CPackInputFile",
@@ -211,7 +207,7 @@ def populate_workflow(
 
     for _, node in output_spec.items():
         node_id = node["id"]
-        if node["class_type"] in CPACK_OUTPUT_NODES:
+        if node["class_type"].startswith("CPackOutput"):
             workflow[node_id]["inputs"]["filename_prefix"] = (
                 output_path / f"{session_id}{node_id}_"
             ).as_posix()
@@ -222,7 +218,7 @@ def retrieve_workflow_outputs(
     workflow: dict,
     output_path: Path,
     session_id: str = "",
-) -> Union[Path, list[Path], dict[str, Path], dict[str, list[Path]]]:
+) -> Union[Path, list[Path], dict[str, Path | list[Path]]]:
     """
     Gets the output file(s) from the workflow.
 
@@ -231,7 +227,7 @@ def retrieve_workflow_outputs(
         output_path (Path): The path where output files are saved.
 
     Returns:
-        Union[Path, list[Path], dict[str, Path], dict[str, list[Path]]]:
+        Union[Path, list[Path], dict[str, Path | list[Path]]]:
             - A single Path if there's only one output file.
             - A list of Paths if there are multiple files for a single output.
             - A dictionary mapping output names to Paths or lists of Paths for multiple outputs.
@@ -240,26 +236,47 @@ def retrieve_workflow_outputs(
         ValueError: If the output node is not of the expected type.
     """
     _, outputs = _parse_workflow(workflow)
+    should_zip = any(
+        node["class_type"] == "CPackOutputZipSwitch" for node in workflow.values()
+    )
+    zip_paths: list[tuple[Path, str]] = []
     if len(outputs) != 1:
         value_map = {}
         for k, node in outputs.items():
             node_id = node["id"]
-            path_strs = list(output_path.glob(f"{node_id}_*"))
+            path_strs = list(output_path.glob(f"{session_id}{node_id}_*"))
+            zip_paths.extend(
+                (p, p.name.replace(f"{session_id}{node_id}", k)) for p in path_strs
+            )
             if len(path_strs) == 1:
                 value_map[k] = path_strs[0]
             else:
                 value_map[k] = path_strs
-        return value_map
+        if not should_zip:
+            return value_map
+    else:
+        name, node = next(iter(outputs.items()))
+        if not node["class_type"].startswith("CPackOutput"):
+            raise ValueError(f"Node {name} is not a comfy-pack output node")
+        node_id = node["id"]
 
-    name, node = next(iter(outputs.items()))
-    if node["class_type"] not in CPACK_OUTPUT_NODES:
-        raise ValueError(f"Output node {name} is not of type {CPACK_OUTPUT_NODES}")
-    node_id = node["id"]
-
-    outs = list(output_path.glob(f"{session_id}{node_id}_*"))
-    if len(outs) == 1:
-        return outs[0]
-    return outs
+        outs = list(output_path.glob(f"{session_id}{node_id}_*"))
+        zip_paths.extend(
+            (p, p.name.replace(f"{session_id}{node_id}", name)) for p in outs
+        )
+        if not should_zip:
+            if len(outs) == 1:
+                return outs[0]
+            return outs
+    if len(zip_paths) == 1:
+        return zip_paths[0][0]
+    # Make a zipball from the collected files
+    output_zip = output_path / f"{session_id}_output.zip"
+    print(f"Creating zip file: {output_zip}")
+    with zipfile.ZipFile(output_zip, "w", zipfile.ZIP_DEFLATED) as zipf:
+        for path, name in zip_paths:
+            zipf.write(path, arcname=name)
+    return output_zip
 
 
 def get_self_git_commit() -> str | None:
