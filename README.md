@@ -96,6 +96,7 @@ Input nodes:
 - ImageInput: Accepts `image` type input, similar to the official `LoadImage` node
 - StringInput: Accepts `string` type input (e.g., prompts)
 - IntInput: Accepts `int` type input (e.g., dimensions, seeds)
+- FloatInput: Accepts `float` type input (e.g., guidance scale)
 - AnyInput: Accepts `combo` type and more input (e.g., custom nodes)
 
 ![input](https://github.com/user-attachments/assets/44264007-0ac8-4e23-8dc0-e60aa0ebcea2)

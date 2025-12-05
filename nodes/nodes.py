@@ -425,6 +425,38 @@ class IntInput:
         return True
 
 
+class FloatInput:
+    COLOR = (142, 36, 170)
+
+    @classmethod
+    def INPUT_TYPES(s):
+        return {
+            "required": {
+                "value": ("FLOAT", {"default": 0.0}),
+            },
+            "optional": {
+                "min": ("FLOAT", {"default": -sys.float_info.max}),
+                "max": ("FLOAT", {"default": sys.float_info.max}),
+            },
+        }
+
+    RETURN_TYPES = ("FLOAT",)
+    RETURN_NAMES = ("value",)
+    FUNCTION = "identity"
+    CPACK_NODE = True
+    CATEGORY = "ComfyPack/input"
+
+    def identity(self, value, min=None, max=None):
+        return (value,)
+
+    @classmethod
+    def VALIDATE_INPUTS(s, value, min=None, max=None):
+        if min is not None and max is not None and min > max:
+            return f"Value must be greater than or equal to {min}"
+        set_bentoml_output([(value,)])
+        return True
+
+
 class AnyInput:
     COLOR = (142, 36, 170)
 
@@ -741,6 +773,7 @@ NODE_CLASS_MAPPINGS = {
     "CPackInputImage": ImageInput,
     "CPackInputString": StringInput,
     "CPackInputInt": IntInput,
+    "CPackInputFloat": FloatInput,
     "CPackInputFile": FileInput,
     "CPackInputAny": AnyInput,
     "CPackOutputTextFile": OutputTextFile,
@@ -750,6 +783,7 @@ NODE_DISPLAY_NAME_MAPPINGS = {
     "CPackInputImage": "Image Input",
     "CPackInputString": "String Input",
     "CPackInputInt": "Int Input",
+    "CPackInputFloat": "Float Input",
     "CPackInputFile": "File Input",
     "CPackInputAny": "Any Input",
     "CPackOutputImage": "Image Output",
